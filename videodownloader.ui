@@ -1,21 +1,339 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <author/>
- <comment/>
- <exportmacro/>
  <class>VideoDownloader</class>
  <widget class="QWidget" name="VideoDownloader">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>300</height>
+    <width>880</width>
+    <height>620</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Form</string>
+   <string>VideoDownloader</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget#VideoDownloader { background-color: #F4F6F8; }
+QLabel { color: #2B2F33; }
+QFrame#cardFrame, QFrame#logFrame { background-color: #FFFFFF; border: 1px solid #CBD5DF; border-radius: 12px; }
+QLineEdit, QComboBox { background-color: #FFFFFF; border: 1px solid #7F8B96; border-radius: 6px; padding: 4px 8px; }
+QLineEdit::placeholder { color: #8A9099; }
+QLineEdit:focus, QComboBox:focus { border: 1px solid #2F7D66; }
+QComboBox::drop-down { border-left: 1px solid #7F8B96; width: 26px; }
+QWidget#VideoDownloader QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B2F33; selection-background-color: #DDEFE9; selection-color: #2B2F33; border: 1px solid #7F8B96; outline: 0; }
+QWidget#VideoDownloader QComboBox QAbstractItemView::item { background-color: #FFFFFF; color: #2B2F33; padding: 6px 10px; }
+QWidget#VideoDownloader QComboBox QAbstractItemView::item:hover { background-color: #EEF7F3; }
+QWidget#VideoDownloader QComboBox QAbstractItemView::item:selected { background-color: #DDEFE9; color: #1E2A24; }
+QPushButton { background-color: #F7F9FB; color: #1F2328; border: 1px solid #7F8B96; border-radius: 8px; padding: 6px 16px; }
+QPushButton:hover { background-color: #EEF2F6; }
+QPushButton:pressed { background-color: #E1E7ED; padding-top: 8px; padding-bottom: 6px; }
+QPushButton#pasteButton, QPushButton#browseButton { background-color: #FFFFFF; }
+QPushButton#downloadButton { background-color: #1FA87A; color: #FFFFFF; border: 1px solid #1A8F68; }
+QPushButton#downloadButton:hover { background-color: #19966B; }
+QPushButton#downloadButton:pressed { background-color: #157E5A; }
+QPushButton#cancelButton { background-color: #FFFFFF; }
+QListWidget, QTreeWidget, QTextEdit { background-color: #FFFFFF; border: 1px solid #CBD5DF; border-radius: 6px; }
+QTreeWidget::item:selected, QListWidget::item:selected { background-color: #E6F2EE; color: #1E2A24; }
+QHeaderView::section { background-color: #F2F4F7; border: 1px solid #CBD5DF; padding: 6px 8px; }</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+  <property name="spacing">
+   <number>16</number>
+  </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="cardFrame">
+     <layout class="QVBoxLayout" name="cardLayout">
+      <property name="spacing">
+       <number>14</number>
+      </property>
+      <property name="leftMargin">
+       <number>16</number>
+      </property>
+      <property name="topMargin">
+       <number>16</number>
+      </property>
+      <property name="rightMargin">
+       <number>16</number>
+      </property>
+      <property name="bottomMargin">
+       <number>16</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="titleLabel">
+        <property name="styleSheet">
+         <string notr="true">font: 12pt "Microsoft YaHei"; font-weight: 600;</string>
+        </property>
+        <property name="text">
+         <string>视频下载器（yt-dlp 前端）</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="topRowLayout">
+        <property name="spacing">
+         <number>18</number>
+        </property>
+        <item>
+         <layout class="QVBoxLayout" name="leftColumnLayout">
+          <property name="spacing">
+           <number>10</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="urlLabel">
+            <property name="text">
+             <string>视频 URL</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="urlInputRow">
+            <item>
+             <widget class="QLineEdit" name="urlLineEdit">
+              <property name="placeholderText">
+               <string>粘贴 URL 并按回车保存</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pasteButton">
+              <property name="text">
+               <string>粘贴并保存</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="optionsLabel">
+            <property name="text">
+             <string>下载选项</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QGridLayout" name="optionsGrid">
+            <property name="horizontalSpacing">
+             <number>8</number>
+            </property>
+            <property name="verticalSpacing">
+             <number>8</number>
+            </property>
+            <item row="0" column="0">
+             <widget class="QLabel" name="formatLabel">
+              <property name="text">
+               <string>格式</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QComboBox" name="formatComboBox">
+              <item>
+               <property name="text">
+                <string>最佳（默认）</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>mp4</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>mkv</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>音频（mp3）</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="qualityLabel">
+              <property name="text">
+               <string>质量</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QComboBox" name="qualityComboBox">
+              <item>
+               <property name="text">
+                <string>最佳</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>1080p</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>720p</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>480p</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="outputLabel">
+              <property name="text">
+               <string>保存路径</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <layout class="QHBoxLayout" name="outputRow">
+              <property name="spacing">
+              <number>8</number>
+              </property>
+              <item>
+               <widget class="QLineEdit" name="outputLineEdit">
+                <property name="placeholderText">
+                 <string>选择下载文件保存目录</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="browseButton">
+                <property name="text">
+                 <string>浏览</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="actionRow">
+            <property name="spacing">
+             <number>12</number>
+            </property>
+            <item>
+             <widget class="QPushButton" name="downloadButton">
+              <property name="styleSheet">
+               <string notr="true">font-weight: 600;</string>
+              </property>
+              <property name="text">
+               <string>开始下载</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="cancelButton">
+              <property name="text">
+               <string>取消任务</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="rightColumnLayout">
+          <property name="spacing">
+           <number>10</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="queueLabel">
+            <property name="text">
+             <string>下载队列</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QTreeWidget" name="downloadsTree">
+            <property name="columnCount">
+             <number>3</number>
+            </property>
+            <property name="headerLabels">
+             <stringlist>
+              <string>文件</string>
+              <string>进度</string>
+              <string>状态</string>
+             </stringlist>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>320</width>
+              <height>220</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QFrame" name="logFrame">
+     <layout class="QVBoxLayout" name="logLayout">
+      <property name="spacing">
+       <number>10</number>
+      </property>
+      <property name="leftMargin">
+       <number>16</number>
+      </property>
+      <property name="topMargin">
+       <number>16</number>
+      </property>
+      <property name="rightMargin">
+       <number>16</number>
+      </property>
+      <property name="bottomMargin">
+       <number>16</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="logTitleLabel">
+        <property name="styleSheet">
+         <string notr="true">font: 11pt "Microsoft YaHei"; font-weight: 600;</string>
+        </property>
+        <property name="text">
+         <string>下载日志与状态</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QTextEdit" name="logTextEdit">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>150</height>
+         </size>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
  </widget>
- <pixmapfunction/>
+ <resources/>
  <connections/>
 </ui>

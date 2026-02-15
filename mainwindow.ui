@@ -121,7 +121,7 @@ QToolButton:checked { background-color: #2F5D50; color: #FFFFFF; }</string>
        <item>
         <widget class="QToolButton" name="navWhisperButton">
          <property name="text">
-          <string>Whisper 转写</string>
+          <string>Whisper字幕识别</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -340,35 +340,35 @@ QPushButton:hover { background-color: #F0F2F5; }</string>
         <property name="currentIndex">
          <number>0</number>
         </property>
-                        <widget class="QWidget" name="pagePlaceholder">
-                         <layout class="QVBoxLayout" name="placeholderLayout">
-                              <property name="leftMargin">
-                               <number>0</number>
-                              </property>
-                              <property name="topMargin">
-                               <number>0</number>
-                              </property>
-                              <property name="rightMargin">
-                               <number>0</number>
-                              </property>
-                              <property name="bottomMargin">
-                               <number>0</number>
-                              </property>
-                              <item>
-                               <widget class="QLabel" name="placeholderLabel">
-                                    <property name="text">
-                                     <string>页面加载中...</string>
-                                    </property>
-                                    <property name="alignment">
-                                     <set>Qt::AlignCenter</set>
-                                    </property>
-                                    <property name="styleSheet">
-                                     <string notr="true">color: #6E737A; font: 11pt &quot;Microsoft YaHei&quot;;</string>
-                                    </property>
-                               </widget>
-                              </item>
-                         </layout>
-                        </widget>
+        <widget class="QWidget" name="pagePlaceholder">
+         <layout class="QVBoxLayout" name="placeholderLayout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="placeholderLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A; font: 11pt &quot;Microsoft YaHei&quot;;</string>
+            </property>
+            <property name="text">
+             <string>页面加载中...</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
        </widget>
       </item>
       <item>
