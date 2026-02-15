@@ -340,239 +340,35 @@ QPushButton:hover { background-color: #F0F2F5; }</string>
         <property name="currentIndex">
          <number>0</number>
         </property>
-        <widget class="QWidget" name="pagePreview">
-         <layout class="QVBoxLayout" name="previewLayout">
-          <property name="spacing">
-           <number>16</number>
-          </property>
-          <property name="leftMargin">
-           <number>0</number>
-          </property>
-          <property name="topMargin">
-           <number>0</number>
-          </property>
-          <property name="rightMargin">
-           <number>0</number>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QFrame" name="cardFrame">
-            <layout class="QVBoxLayout" name="cardLayout">
-             <property name="spacing">
-              <number>12</number>
-             </property>
-             <property name="leftMargin">
-              <number>16</number>
-             </property>
-             <property name="topMargin">
-              <number>16</number>
-             </property>
-             <property name="rightMargin">
-              <number>16</number>
-             </property>
-             <property name="bottomMargin">
-              <number>16</number>
-             </property>
-             <item>
-              <widget class="QLabel" name="previewTitleLabel">
-               <property name="styleSheet">
-                <string notr="true">font: 12pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
-               </property>
-               <property name="text">
-                <string>音视频预览与字幕预览窗口</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <layout class="QHBoxLayout" name="previewBodyLayout">
-               <property name="spacing">
-                <number>16</number>
-               </property>
-               <item>
-                <widget class="QFrame" name="videoPlaceholder">
-                 <property name="minimumSize">
-                  <size>
-                   <width>360</width>
-                   <height>220</height>
-                  </size>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">background-color: #2A2F36; border-radius: 8px;</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <layout class="QVBoxLayout" name="previewInfoLayout">
-                 <property name="spacing">
-                  <number>8</number>
-                 </property>
-                 <item>
-                  <layout class="QHBoxLayout" name="infoRowOne">
-                   <item>
-                    <widget class="QLabel" name="infoLabelOne">
-                     <property name="styleSheet">
-                      <string notr="true">color: #6E737A;</string>
-                     </property>
-                     <property name="text">
-                      <string>音视频时长</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QLabel" name="infoValueOne">
-                     <property name="text">
-                      <string>00:00:00</string>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </item>
-                 <item>
-                  <layout class="QHBoxLayout" name="infoRowTwo">
-                   <item>
-                    <widget class="QLabel" name="infoLabelTwo">
-                     <property name="styleSheet">
-                      <string notr="true">color: #6E737A;</string>
-                     </property>
-                     <property name="text">
-                      <string>字幕引擎</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QLabel" name="infoValueTwo">
-                     <property name="text">
-                      <string>自动推荐</string>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </item>
-                 <item>
-                  <layout class="QHBoxLayout" name="infoRowThree">
-                   <item>
-                    <widget class="QLabel" name="infoLabelThree">
-                     <property name="styleSheet">
-                      <string notr="true">color: #6E737A;</string>
-                     </property>
-                     <property name="text">
-                      <string>校对与润色</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QLabel" name="infoValueThree">
-                     <property name="text">
-                      <string>待配置</string>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </item>
-                 <item>
-                  <widget class="QProgressBar" name="progressBar">
-                   <property name="styleSheet">
-                    <string notr="true">QProgressBar { background-color: #E6E8EB; border-radius: 4px; height: 10px; }
-QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
-                   </property>
-                   <property name="value">
-                    <number>45</number>
-                   </property>
-                   <property name="textVisible">
-                    <bool>false</bool>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-              </layout>
-             </item>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <widget class="QFrame" name="logFrame">
-            <property name="styleSheet">
-             <string notr="true">background-color: #FFFFFF; border-radius: 10px;</string>
-            </property>
-            <layout class="QVBoxLayout" name="logLayout">
-             <property name="spacing">
-              <number>8</number>
-             </property>
-             <property name="leftMargin">
-              <number>16</number>
-             </property>
-             <property name="topMargin">
-              <number>16</number>
-             </property>
-             <property name="rightMargin">
-              <number>16</number>
-             </property>
-             <property name="bottomMargin">
-              <number>16</number>
-             </property>
-             <item>
-              <widget class="QLabel" name="logTitleLabel">
-               <property name="styleSheet">
-                <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
-               </property>
-               <property name="text">
-                <string>日志与状态流</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QTextEdit" name="logTextEdit">
-               <property name="minimumSize">
-                <size>
-                 <width>0</width>
-                 <height>180</height>
-                </size>
-               </property>
-               <property name="styleSheet">
-                <string notr="true">QTextEdit { border: 1px solid #E6E8EB; border-radius: 6px; }</string>
-               </property>
-               <property name="readOnly">
-                <bool>true</bool>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-        <widget class="QWidget" name="pageOther">
-         <layout class="QVBoxLayout" name="otherLayout">
-          <property name="leftMargin">
-           <number>20</number>
-          </property>
-          <property name="topMargin">
-           <number>20</number>
-          </property>
-          <property name="rightMargin">
-           <number>20</number>
-          </property>
-          <property name="bottomMargin">
-           <number>20</number>
-          </property>
-          <item>
-           <widget class="QLabel" name="placeholderLabel">
-            <property name="styleSheet">
-             <string notr="true">color: #6E737A; font: 12pt &quot;Microsoft YaHei&quot;;</string>
-            </property>
-            <property name="text">
-             <string>功能页面占位</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
+                        <widget class="QWidget" name="pagePlaceholder">
+                         <layout class="QVBoxLayout" name="placeholderLayout">
+                              <property name="leftMargin">
+                               <number>0</number>
+                              </property>
+                              <property name="topMargin">
+                               <number>0</number>
+                              </property>
+                              <property name="rightMargin">
+                               <number>0</number>
+                              </property>
+                              <property name="bottomMargin">
+                               <number>0</number>
+                              </property>
+                              <item>
+                               <widget class="QLabel" name="placeholderLabel">
+                                    <property name="text">
+                                     <string>页面加载中...</string>
+                                    </property>
+                                    <property name="alignment">
+                                     <set>Qt::AlignCenter</set>
+                                    </property>
+                                    <property name="styleSheet">
+                                     <string notr="true">color: #6E737A; font: 11pt &quot;Microsoft YaHei&quot;;</string>
+                                    </property>
+                               </widget>
+                              </item>
+                         </layout>
+                        </widget>
        </widget>
       </item>
       <item>
