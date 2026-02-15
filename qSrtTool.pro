@@ -17,13 +17,31 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    outputmanagement.cpp \
+    subtitleburning.cpp \
+    subtitleextraction.cpp \
+    subtitletranslation.cpp \
+    videodownloader.cpp \
+    videoloader.cpp
 
 HEADERS += \
-    mainwindow.h
+    mainwindow.h \
+    outputmanagement.h \
+    subtitleburning.h \
+    subtitleextraction.h \
+    subtitletranslation.h \
+    videodownloader.h \
+    videoloader.h
 
 FORMS += \
-    mainwindow.ui
+    mainwindow.ui \
+    outputmanagement.ui \
+    subtitleburning.ui \
+    subtitleextraction.ui \
+    subtitletranslation.ui \
+    videodownloader.ui \
+    videoloader.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
