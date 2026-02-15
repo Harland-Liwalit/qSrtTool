@@ -1,2 +1,13 @@
-<!DOCTYPE RCC>
-<RCC version="1.0"/>
+<RCC>
+    <qresource prefix="/new/prefix1">
+        <file>style/AMOLED.qss</file>
+        <file>style/Aqua.qss</file>
+        <file>style/ConsoleStyle.qss</file>
+        <file>style/ElegantDark.qss</file>
+        <file>style/MacOS.qss</file>
+        <file>style/ManjaroMix.qss</file>
+        <file>style/MaterialDark.qss</file>
+        <file>style/NeonButtons.qss</file>
+        <file>style/Ubuntu.qss</file>
+    </qresource>
+</RCC>

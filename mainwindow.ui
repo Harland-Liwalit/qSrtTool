@@ -6,16 +6,655 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>1100</width>
+    <height>720</height>
    </rect>
   </property>
-  <property name="windowTitle">
-   <string>MainWindow</string>
+  <property name="minimumSize">
+   <size>
+    <width>980</width>
+    <height>640</height>
+   </size>
   </property>
-  <widget class="QWidget" name="centralwidget"/>
-  <widget class="QMenuBar" name="menubar"/>
-  <widget class="QStatusBar" name="statusbar"/>
+  <property name="windowTitle">
+   <string>qSrtTool</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="rootLayout">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QFrame" name="sidebarFrame">
+      <property name="minimumSize">
+       <size>
+        <width>180</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>220</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">#sidebarFrame { background-color: #1C2026; }
+QToolButton { color: #F5F7FA; font: 11pt &quot;Microsoft YaHei&quot;; padding: 10px 12px; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 8px; }
+QToolButton:hover { background-color: #2A2F36; }
+QToolButton:checked { background-color: #2F5D50; color: #FFFFFF; }</string>
+      </property>
+      <layout class="QVBoxLayout" name="sidebarLayout">
+       <property name="spacing">
+        <number>6</number>
+       </property>
+       <property name="leftMargin">
+        <number>12</number>
+       </property>
+       <property name="topMargin">
+        <number>16</number>
+       </property>
+       <property name="rightMargin">
+        <number>12</number>
+       </property>
+       <property name="bottomMargin">
+        <number>16</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="appTitleLabel">
+         <property name="styleSheet">
+          <string notr="true">color: #FFFFFF; font: 14pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
+         </property>
+         <property name="text">
+          <string>音视频字幕工具</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="sidebarSpacerTop">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>12</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QToolButton" name="navDownloadButton">
+         <property name="text">
+          <string>视频下载器</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="navPreviewButton">
+         <property name="text">
+          <string>音视频预览</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="navWhisperButton">
+         <property name="text">
+          <string>Whisper 转写</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="navTranslateButton">
+         <property name="text">
+          <string>LLM字幕翻译</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="navBurnButton">
+         <property name="text">
+          <string>烧录与压制</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="navOutputButton">
+         <property name="text">
+          <string>输出管理</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="sidebarSpacerBottom">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="sidebarFooterLabel">
+         <property name="styleSheet">
+          <string notr="true">color: #8A9099; font: 9pt &quot;Microsoft YaHei&quot;;</string>
+         </property>
+         <property name="text">
+          <string>v1.0.0</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <layout class="QVBoxLayout" name="contentLayout">
+      <property name="spacing">
+       <number>18</number>
+      </property>
+      <property name="leftMargin">
+       <number>18</number>
+      </property>
+      <property name="topMargin">
+       <number>18</number>
+      </property>
+      <property name="rightMargin">
+       <number>18</number>
+      </property>
+      <property name="bottomMargin">
+       <number>18</number>
+      </property>
+      <item>
+       <layout class="QHBoxLayout" name="topMenuLayout">
+        <property name="spacing">
+         <number>14</number>
+        </property>
+        <property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>8</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <property name="bottomMargin">
+         <number>8</number>
+        </property>
+        <item>
+         <widget class="QPushButton" name="menuFileButton">
+          <property name="minimumSize">
+           <size>
+            <width>80</width>
+            <height>34</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton { background-color: #FFFFFF; color: #2B2F33; border: 1px solid #D7DADF; border-radius: 8px; padding: 6px 16px; font: 11pt &quot;Microsoft YaHei&quot;; }
+QPushButton:hover { background-color: #F0F2F5; }</string>
+          </property>
+          <property name="text">
+           <string>文件</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="menuSubtitleButton">
+          <property name="minimumSize">
+           <size>
+            <width>80</width>
+            <height>34</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton { background-color: #FFFFFF; color: #2B2F33; border: 1px solid #D7DADF; border-radius: 8px; padding: 6px 16px; font: 11pt &quot;Microsoft YaHei&quot;; }
+QPushButton:hover { background-color: #F0F2F5; }</string>
+          </property>
+          <property name="text">
+           <string>字幕</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="menuTranslateButton">
+          <property name="minimumSize">
+           <size>
+            <width>80</width>
+            <height>34</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton { background-color: #FFFFFF; color: #2B2F33; border: 1px solid #D7DADF; border-radius: 8px; padding: 6px 16px; font: 11pt &quot;Microsoft YaHei&quot;; }
+QPushButton:hover { background-color: #F0F2F5; }</string>
+          </property>
+          <property name="text">
+           <string>翻译</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="menuBurnButton">
+          <property name="minimumSize">
+           <size>
+            <width>80</width>
+            <height>34</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton { background-color: #FFFFFF; color: #2B2F33; border: 1px solid #D7DADF; border-radius: 8px; padding: 6px 16px; font: 11pt &quot;Microsoft YaHei&quot;; }
+QPushButton:hover { background-color: #F0F2F5; }</string>
+          </property>
+          <property name="text">
+           <string>烧录</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="menuSettingsButton">
+          <property name="minimumSize">
+           <size>
+            <width>80</width>
+            <height>34</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton { background-color: #FFFFFF; color: #2B2F33; border: 1px solid #D7DADF; border-radius: 8px; padding: 6px 16px; font: 11pt &quot;Microsoft YaHei&quot;; }
+QPushButton:hover { background-color: #F0F2F5; }</string>
+          </property>
+          <property name="text">
+           <string>设置</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="menuAboutButton">
+          <property name="minimumSize">
+           <size>
+            <width>80</width>
+            <height>34</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton { background-color: #FFFFFF; color: #2B2F33; border: 1px solid #D7DADF; border-radius: 8px; padding: 6px 16px; font: 11pt &quot;Microsoft YaHei&quot;; }
+QPushButton:hover { background-color: #F0F2F5; }</string>
+          </property>
+          <property name="text">
+           <string>关于</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="topMenuSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QStackedWidget" name="mainStackedWidget">
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
+        <widget class="QWidget" name="pagePreview">
+         <layout class="QVBoxLayout" name="previewLayout">
+          <property name="spacing">
+           <number>16</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QFrame" name="cardFrame">
+            <layout class="QVBoxLayout" name="cardLayout">
+             <property name="spacing">
+              <number>12</number>
+             </property>
+             <property name="leftMargin">
+              <number>16</number>
+             </property>
+             <property name="topMargin">
+              <number>16</number>
+             </property>
+             <property name="rightMargin">
+              <number>16</number>
+             </property>
+             <property name="bottomMargin">
+              <number>16</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="previewTitleLabel">
+               <property name="styleSheet">
+                <string notr="true">font: 12pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
+               </property>
+               <property name="text">
+                <string>音视频预览与字幕预览窗口</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="previewBodyLayout">
+               <property name="spacing">
+                <number>16</number>
+               </property>
+               <item>
+                <widget class="QFrame" name="videoPlaceholder">
+                 <property name="minimumSize">
+                  <size>
+                   <width>360</width>
+                   <height>220</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: #2A2F36; border-radius: 8px;</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <layout class="QVBoxLayout" name="previewInfoLayout">
+                 <property name="spacing">
+                  <number>8</number>
+                 </property>
+                 <item>
+                  <layout class="QHBoxLayout" name="infoRowOne">
+                   <item>
+                    <widget class="QLabel" name="infoLabelOne">
+                     <property name="styleSheet">
+                      <string notr="true">color: #6E737A;</string>
+                     </property>
+                     <property name="text">
+                      <string>音视频时长</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="infoValueOne">
+                     <property name="text">
+                      <string>00:00:00</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <layout class="QHBoxLayout" name="infoRowTwo">
+                   <item>
+                    <widget class="QLabel" name="infoLabelTwo">
+                     <property name="styleSheet">
+                      <string notr="true">color: #6E737A;</string>
+                     </property>
+                     <property name="text">
+                      <string>字幕引擎</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="infoValueTwo">
+                     <property name="text">
+                      <string>自动推荐</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <layout class="QHBoxLayout" name="infoRowThree">
+                   <item>
+                    <widget class="QLabel" name="infoLabelThree">
+                     <property name="styleSheet">
+                      <string notr="true">color: #6E737A;</string>
+                     </property>
+                     <property name="text">
+                      <string>校对与润色</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="infoValueThree">
+                     <property name="text">
+                      <string>待配置</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QProgressBar" name="progressBar">
+                   <property name="styleSheet">
+                    <string notr="true">QProgressBar { background-color: #E6E8EB; border-radius: 4px; height: 10px; }
+QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
+                   </property>
+                   <property name="value">
+                    <number>45</number>
+                   </property>
+                   <property name="textVisible">
+                    <bool>false</bool>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="logFrame">
+            <property name="styleSheet">
+             <string notr="true">background-color: #FFFFFF; border-radius: 10px;</string>
+            </property>
+            <layout class="QVBoxLayout" name="logLayout">
+             <property name="spacing">
+              <number>8</number>
+             </property>
+             <property name="leftMargin">
+              <number>16</number>
+             </property>
+             <property name="topMargin">
+              <number>16</number>
+             </property>
+             <property name="rightMargin">
+              <number>16</number>
+             </property>
+             <property name="bottomMargin">
+              <number>16</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="logTitleLabel">
+               <property name="styleSheet">
+                <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
+               </property>
+               <property name="text">
+                <string>日志与状态流</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QTextEdit" name="logTextEdit">
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>180</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">QTextEdit { border: 1px solid #E6E8EB; border-radius: 6px; }</string>
+               </property>
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="pageOther">
+         <layout class="QVBoxLayout" name="otherLayout">
+          <property name="leftMargin">
+           <number>20</number>
+          </property>
+          <property name="topMargin">
+           <number>20</number>
+          </property>
+          <property name="rightMargin">
+           <number>20</number>
+          </property>
+          <property name="bottomMargin">
+           <number>20</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="placeholderLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A; font: 12pt &quot;Microsoft YaHei&quot;;</string>
+            </property>
+            <property name="text">
+             <string>功能页面占位</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </widget>
+      </item>
+      <item>
+       <widget class="QFrame" name="statusBarWidget">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>36</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">#statusBarWidget { background-color: #1C2026; border-radius: 8px; }
+#statusBarWidget QLabel { color: #C6CBD2; font: 9pt &quot;Microsoft YaHei&quot;; }</string>
+        </property>
+        <layout class="QHBoxLayout" name="statusBarLayout">
+         <property name="spacing">
+          <number>10</number>
+         </property>
+         <property name="leftMargin">
+          <number>12</number>
+         </property>
+         <property name="topMargin">
+          <number>6</number>
+         </property>
+         <property name="rightMargin">
+          <number>12</number>
+         </property>
+         <property name="bottomMargin">
+          <number>6</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="statusHintLabel">
+           <property name="text">
+            <string>等待用户选择文件</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="statusBarSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QLabel" name="statusPerfLabel">
+           <property name="styleSheet">
+            <string notr="true">color: #E8EAED; font-weight: 600;</string>
+           </property>
+           <property name="text">
+            <string>CPU: 45% | 内存: 1.2GB</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1100</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar">
+   <property name="sizeGripEnabled">
+    <bool>false</bool>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>
