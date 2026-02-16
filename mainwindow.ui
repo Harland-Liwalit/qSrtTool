@@ -446,11 +446,7 @@ QPushButton:hover { background-color: #F0F2F5; }</string>
     </rect>
    </property>
   </widget>
-  <widget class="QStatusBar" name="statusbar">
-   <property name="sizeGripEnabled">
-    <bool>false</bool>
-   </property>
-  </widget>
+  
  </widget>
  <resources/>
  <connections/>

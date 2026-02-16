@@ -21,6 +21,8 @@ QLineEdit, QComboBox { background-color: #FFFFFF; border: 1px solid #7F8B96; bor
 QLineEdit::placeholder { color: #8A9099; }
 QLineEdit:focus, QComboBox:focus { border: 1px solid #2F7D66; }
 QComboBox::drop-down { border-left: 1px solid #7F8B96; width: 26px; }
+QComboBox::down-arrow { image: url(:/new/prefix1/style/QSS_IMG/go-down-symbolic.symbolic.png); width: 12px; height: 12px; }
+QComboBox::down-arrow:on { image: url(:/new/prefix1/style/QSS_IMG/go-up-symbolic.symbolic.png); }
 QWidget#VideoDownloader QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B2F33; selection-background-color: #DDEFE9; selection-color: #2B2F33; border: 1px solid #7F8B96; outline: 0; }
 QWidget#VideoDownloader QComboBox QAbstractItemView::item { background-color: #FFFFFF; color: #2B2F33; padding: 6px 10px; }
 QWidget#VideoDownloader QComboBox QAbstractItemView::item:hover { background-color: #EEF7F3; }

@@ -1,21 +1,679 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <author/>
- <comment/>
- <exportmacro/>
  <class>SubtitleTranslation</class>
  <widget class="QWidget" name="SubtitleTranslation">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>300</height>
+    <width>980</width>
+    <height>680</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Form</string>
+   <string>SubtitleTranslation</string>
   </property>
+    <property name="styleSheet">
+     <string notr="true">QWidget#SubtitleTranslation { background-color: #F4F6F8; }
+QLabel { color: #2B2F33; }
+QFrame#settingsFrame, QFrame#outputFrame, QFrame#headerFrame { background-color: #FFFFFF; border: 1px solid #CBD5DF; border-radius: 12px; }
+QLineEdit, QComboBox { background-color: #FFFFFF; border: 1px solid #7F8B96; border-radius: 6px; padding: 4px 8px; }
+QLineEdit::placeholder { color: #8A9099; }
+QLineEdit:focus, QComboBox:focus { border: 1px solid #2F7D66; }
+QComboBox::drop-down { border-left: 1px solid #7F8B96; width: 26px; }
+QComboBox::down-arrow { image: url(:/new/prefix1/style/QSS_IMG/go-down-symbolic.symbolic.png); width: 12px; height: 12px; }
+QComboBox::down-arrow:on { image: url(:/new/prefix1/style/QSS_IMG/go-up-symbolic.symbolic.png); }
+QWidget#SubtitleTranslation QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B2F33; selection-background-color: #DDEFE9; selection-color: #2B2F33; border: 1px solid #7F8B96; outline: 0; }
+QWidget#SubtitleTranslation QComboBox QAbstractItemView::item { background-color: #FFFFFF; color: #2B2F33; padding: 6px 10px; }
+QWidget#SubtitleTranslation QComboBox QAbstractItemView::item:hover { background-color: #EEF7F3; }
+QWidget#SubtitleTranslation QComboBox QAbstractItemView::item:selected { background-color: #DDEFE9; color: #1E2A24; }
+QPushButton { background-color: #F7F9FB; color: #1F2328; border: 1px solid #7F8B96; border-radius: 8px; padding: 6px 16px; }
+QPushButton:hover { background-color: #EEF2F6; }
+QPushButton:pressed { background-color: #E1E7ED; padding-top: 8px; padding-bottom: 6px; }
+QPushButton#startTranslateButton { background-color: #1FA87A; color: #FFFFFF; border: 1px solid #1A8F68; }
+QPushButton#startTranslateButton:hover { background-color: #19966B; }
+QPushButton#startTranslateButton:pressed { background-color: #157E5A; }
+QTextEdit { background-color: #FFFFFF; border: 1px solid #CBD5DF; border-radius: 6px; }
+QProgressBar { background-color: #E6E8EB; border-radius: 4px; height: 10px; }
+QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
+    </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>16</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QHBoxLayout" name="bodyLayout">
+     <property name="spacing">
+      <number>16</number>
+     </property>
+     <item>
+      <widget class="QFrame" name="settingsFrame">
+       <property name="minimumSize">
+        <size>
+         <width>340</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: #FFFFFF; border-radius: 10px;</string>
+       </property>
+       <layout class="QVBoxLayout" name="settingsLayout">
+        <property name="spacing">
+         <number>12</number>
+        </property>
+        <property name="leftMargin">
+         <number>16</number>
+        </property>
+        <property name="topMargin">
+         <number>16</number>
+        </property>
+        <property name="rightMargin">
+         <number>16</number>
+        </property>
+        <property name="bottomMargin">
+         <number>16</number>
+        </property>
+        <item>
+         <layout class="QHBoxLayout" name="inputRowLayout">
+          <property name="spacing">
+           <number>8</number>
+          </property>
+          <item>
+           <widget class="QLineEdit" name="srtPathLineEdit">
+            <property name="placeholderText">
+             <string>选择或拖入 SRT 文件</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="importSrtButton">
+            <property name="text">
+             <string>导入 SRT</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="presetRowLayout">
+          <property name="spacing">
+           <number>8</number>
+          </property>
+          <item>
+           <widget class="QComboBox" name="presetComboBox">
+            <property name="minimumHeight">
+             <number>28</number>
+            </property>
+            <item>
+             <property name="text">
+              <string>默认预设</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>术语增强</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>口语化翻译</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>简洁模式</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="importPresetButton">
+            <property name="text">
+             <string>导入预设</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="editPresetButton">
+            <property name="text">
+             <string>编辑预设</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="providerTitleLabel">
+          <property name="styleSheet">
+           <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
+          </property>
+          <property name="text">
+           <string>模型与服务</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QFormLayout" name="providerFormLayout">
+          <property name="labelAlignment">
+           <set>Qt::AlignLeft|Qt::AlignVCenter</set>
+          </property>
+          <property name="formAlignment">
+           <set>Qt::AlignLeft|Qt::AlignTop</set>
+          </property>
+          <property name="horizontalSpacing">
+           <number>8</number>
+          </property>
+          <property name="verticalSpacing">
+           <number>8</number>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="providerLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>服务</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="providerComboBox">
+            <property name="minimumHeight">
+             <number>28</number>
+            </property>
+            <item>
+             <property name="text">
+              <string>本地 OpenAI 兼容</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>LM Studio</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Ollama</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>OpenAI API</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="hostLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>地址</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLineEdit" name="hostLineEdit">
+            <property name="placeholderText">
+             <string>http://127.0.0.1:1234/v1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="apiKeyLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>密钥</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLineEdit" name="apiKeyLineEdit">
+            <property name="echoMode">
+             <enum>QLineEdit::Password</enum>
+            </property>
+            <property name="placeholderText">
+             <string>可选，留空为本地模式</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="modelLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>模型</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <layout class="QHBoxLayout" name="modelRowLayout">
+            <property name="spacing">
+             <number>6</number>
+            </property>
+            <item>
+             <widget class="QComboBox" name="modelComboBox">
+              <item>
+               <property name="text">
+                <string>Qwen2.5-7B-Instruct</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Llama-3.1-8B-Instruct</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Mistral-7B-Instruct</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Gemma-2-9B-Instruct</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DeepSeek-R1-Distill-7B</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="refreshModelButton">
+              <property name="text">
+               <string>刷新</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QFrame" name="dividerLineOne">
+          <property name="frameShape">
+           <enum>QFrame::HLine</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Sunken</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="paramsTitleLabel">
+          <property name="styleSheet">
+           <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
+          </property>
+          <property name="text">
+           <string>翻译参数</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QFormLayout" name="paramsFormLayout">
+          <property name="horizontalSpacing">
+           <number>8</number>
+          </property>
+          <property name="verticalSpacing">
+           <number>8</number>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="sourceLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>源语言</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="sourceLangComboBox">
+            <item>
+             <property name="text">
+              <string>自动检测</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>中文</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>英语</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>日语</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>韩语</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="targetLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>目标语言</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QComboBox" name="targetLangComboBox">
+            <item>
+             <property name="text">
+              <string>中文</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>英语</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>日语</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>韩语</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="temperatureLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>温度</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QDoubleSpinBox" name="temperatureSpinBox">
+            <property name="decimals">
+             <number>2</number>
+            </property>
+            <property name="singleStep">
+             <double>0.05</double>
+            </property>
+            <property name="minimum">
+             <double>0.0</double>
+            </property>
+            <property name="maximum">
+             <double>1.5</double>
+            </property>
+            <property name="value">
+             <double>0.2</double>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="maxTokensLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>最大长度</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QSpinBox" name="maxTokensSpinBox">
+            <property name="minimum">
+             <number>256</number>
+            </property>
+            <property name="maximum">
+             <number>4096</number>
+            </property>
+            <property name="singleStep">
+             <number>128</number>
+            </property>
+            <property name="value">
+             <number>1024</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="keepTimelineCheckBox">
+          <property name="text">
+           <string>保留原字幕时间轴</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="reviewCheckBox">
+          <property name="text">
+           <string>逐句校对与润色</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="streamingCheckBox">
+          <property name="text">
+           <string>流式传输</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="settingsSpacer">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="startTranslateButton">
+          <property name="minimumHeight">
+           <number>36</number>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton { background-color: #1FA87A; color: #FFFFFF; border-radius: 6px; font-weight: 600; }</string>
+          </property>
+          <property name="text">
+           <string>开始翻译</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QFrame" name="outputFrame">
+       <property name="styleSheet">
+        <string notr="true">background-color: #FFFFFF; border-radius: 10px;</string>
+       </property>
+       <layout class="QVBoxLayout" name="outputLayout">
+        <property name="spacing">
+         <number>12</number>
+        </property>
+        <property name="leftMargin">
+         <number>16</number>
+        </property>
+        <property name="topMargin">
+         <number>16</number>
+        </property>
+        <property name="rightMargin">
+         <number>16</number>
+        </property>
+        <property name="bottomMargin">
+         <number>16</number>
+        </property>
+        <item>
+         <layout class="QHBoxLayout" name="outputHeaderLayout">
+          <property name="spacing">
+           <number>8</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="outputTitleLabel">
+            <property name="styleSheet">
+             <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
+            </property>
+            <property name="text">
+             <string>输出预览</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="outputHeaderSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="openLogButton">
+            <property name="text">
+             <string>查看日志</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QTextEdit" name="outputTextEdit">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>360</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QTextEdit { border: 1px solid #E6E8EB; border-radius: 6px; }</string>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="progressRowLayout">
+          <property name="spacing">
+           <number>8</number>
+          </property>
+          <item>
+           <widget class="QProgressBar" name="translateProgressBar">
+            <property name="styleSheet">
+             <string notr="true">QProgressBar { background-color: #E6E8EB; border-radius: 4px; height: 10px; }
+QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
+            </property>
+            <property name="value">
+             <number>0</number>
+            </property>
+            <property name="textVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="progressStatusLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>等待开始</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="outputButtonLayout">
+          <property name="spacing">
+           <number>8</number>
+          </property>
+          <item>
+           <widget class="QPushButton" name="exportSrtButton">
+            <property name="text">
+             <string>导出 SRT</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="copyResultButton">
+            <property name="text">
+             <string>复制结果</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="clearOutputButton">
+            <property name="text">
+             <string>清空</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="outputButtonSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
  </widget>
- <pixmapfunction/>
+ <resources/>
  <connections/>
 </ui>

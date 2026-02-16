@@ -9,5 +9,10 @@
         <file>style/MaterialDark.qss</file>
         <file>style/NeonButtons.qss</file>
         <file>style/Ubuntu.qss</file>
+        <file>style/QSS_IMG/go-down-symbolic.symbolic.png</file>
+        <file>style/QSS_IMG/go-next-symbolic.symbolic.png</file>
+        <file>style/QSS_IMG/go-previous-symbolic.symbolic.png</file>
+        <file>style/QSS_IMG/go-up-symbolic.symbolic.png</file>
+        <file>style/QSS_IMG/object-select-symbolic.symbolic.png</file>
     </qresource>
 </RCC>

@@ -1,21 +1,436 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <author/>
- <comment/>
- <exportmacro/>
  <class>SubtitleBurning</class>
  <widget class="QWidget" name="SubtitleBurning">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>400</width>
-    <height>300</height>
-   </rect>
-  </property>
-  <property name="windowTitle">
-   <string>Form</string>
-  </property>
+    <property name="geometry">
+     <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>980</width>
+        <height>680</height>
+     </rect>
+    </property>
+    <property name="windowTitle">
+     <string>SubtitleBurning</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QWidget#SubtitleBurning { background-color: #F4F6F8; }
+QLabel { color: #2B2F33; }
+QFrame#cardFrame, QFrame#logFrame { background-color: #FFFFFF; border: 1px solid #CBD5DF; border-radius: 12px; }
+QLineEdit, QComboBox { background-color: #FFFFFF; border: 1px solid #7F8B96; border-radius: 6px; padding: 4px 8px; }
+QLineEdit::placeholder { color: #8A9099; }
+QLineEdit:focus, QComboBox:focus { border: 1px solid #2F7D66; }
+QComboBox::drop-down { border-left: 1px solid #7F8B96; width: 26px; }
+QComboBox::down-arrow { image: url(:/new/prefix1/style/QSS_IMG/go-down-symbolic.symbolic.png); width: 12px; height: 12px; }
+QComboBox::down-arrow:on { image: url(:/new/prefix1/style/QSS_IMG/go-up-symbolic.symbolic.png); }
+QWidget#SubtitleBurning QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B2F33; selection-background-color: #DDEFE9; selection-color: #2B2F33; border: 1px solid #7F8B96; outline: 0; }
+QWidget#SubtitleBurning QComboBox QAbstractItemView::item { background-color: #FFFFFF; color: #2B2F33; padding: 6px 10px; }
+QWidget#SubtitleBurning QComboBox QAbstractItemView::item:hover { background-color: #EEF7F3; }
+QWidget#SubtitleBurning QComboBox QAbstractItemView::item:selected { background-color: #DDEFE9; color: #1E2A24; }
+QPushButton { background-color: #F7F9FB; color: #1F2328; border: 1px solid #7F8B96; border-radius: 8px; padding: 6px 16px; }
+QPushButton:hover { background-color: #EEF2F6; }
+QPushButton:pressed { background-color: #E1E7ED; padding-top: 8px; padding-bottom: 6px; }
+QPushButton#startBurnButton { background-color: #1FA87A; color: #FFFFFF; border: 1px solid #1A8F68; }
+QPushButton#startBurnButton:hover { background-color: #19966B; }
+QPushButton#startBurnButton:pressed { background-color: #157E5A; }
+QTextEdit { background-color: #FFFFFF; border: 1px solid #CBD5DF; border-radius: 6px; }
+QProgressBar { background-color: #E6E8EB; border-radius: 4px; height: 10px; }
+QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
+    </property>
+    <layout class="QVBoxLayout" name="mainLayout">
+     <property name="spacing">
+        <number>16</number>
+     </property>
+     <property name="leftMargin">
+        <number>0</number>
+     </property>
+     <property name="topMargin">
+        <number>0</number>
+     </property>
+     <property name="rightMargin">
+        <number>0</number>
+     </property>
+     <property name="bottomMargin">
+        <number>0</number>
+     </property>
+     <item>
+        <widget class="QFrame" name="cardFrame">
+         <layout class="QVBoxLayout" name="cardLayout">
+            <property name="spacing">
+             <number>14</number>
+            </property>
+            <property name="leftMargin">
+             <number>16</number>
+            </property>
+            <property name="topMargin">
+             <number>16</number>
+            </property>
+            <property name="rightMargin">
+             <number>16</number>
+            </property>
+            <property name="bottomMargin">
+             <number>16</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="titleLabel">
+                <property name="styleSheet">
+                 <string notr="true">font: 12pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
+                </property>
+                <property name="text">
+                 <string>字幕烧录与压制（FFmpeg）</string>
+                </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="topRowLayout">
+                <property name="spacing">
+                 <number>16</number>
+                </property>
+                <item>
+                 <widget class="QFrame" name="previewFrame">
+                    <property name="minimumSize">
+                     <size>
+                        <width>360</width>
+                        <height>220</height>
+                     </size>
+                    </property>
+                    <property name="styleSheet">
+                     <string notr="true">background-color: #2A2F36; border-radius: 8px;</string>
+                    </property>
+                    <layout class="QVBoxLayout" name="previewLayout">
+                     <item>
+                        <widget class="QLabel" name="previewLabel">
+                         <property name="styleSheet">
+                          <string notr="true">color: #C7CBD1;</string>
+                         </property>
+                         <property name="text">
+                          <string>视频预览</string>
+                         </property>
+                         <property name="alignment">
+                          <set>Qt::AlignCenter</set>
+                         </property>
+                        </widget>
+                     </item>
+                    </layout>
+                 </widget>
+                </item>
+                <item>
+                 <layout class="QVBoxLayout" name="inputColumnLayout">
+                    <property name="spacing">
+                     <number>10</number>
+                    </property>
+                    <item>
+                     <layout class="QHBoxLayout" name="quickActionRow">
+                      <property name="spacing">
+                       <number>8</number>
+                      </property>
+                      <item>
+                       <widget class="QPushButton" name="importVideoButton">
+                        <property name="text">
+                         <string>导入视频</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QPushButton" name="importSubtitleButton">
+                        <property name="text">
+                         <string>导入字幕文件</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <spacer name="quickActionSpacer">
+                        <property name="orientation">
+                         <enum>Qt::Horizontal</enum>
+                        </property>
+                        <property name="sizeHint" stdset="0">
+                         <size>
+                          <width>40</width>
+                          <height>20</height>
+                         </size>
+                        </property>
+                       </spacer>
+                      </item>
+                      <item>
+                       <widget class="QPushButton" name="startBurnButton">
+                        <property name="styleSheet">
+                         <string notr="true">font-weight: 600;</string>
+                        </property>
+                        <property name="text">
+                         <string>开始压制</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QPushButton" name="cancelBurnButton">
+                        <property name="text">
+                         <string>取消任务</string>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                    <item>
+                     <layout class="QGridLayout" name="inputGrid">
+                        <property name="horizontalSpacing">
+                         <number>8</number>
+                        </property>
+                        <property name="verticalSpacing">
+                         <number>10</number>
+                        </property>
+                        <item row="0" column="0">
+                         <widget class="QLabel" name="trackLabel">
+                            <property name="text">
+                             <string>字幕轨道</string>
+                            </property>
+                         </widget>
+                        </item>
+                        <item row="0" column="1">
+                         <widget class="QComboBox" name="subtitleTrackComboBox">
+                          <property name="sizePolicy">
+                           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                            <horstretch>0</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                            <item>
+                             <property name="text">
+                                <string>自动选择</string>
+                             </property>
+                            </item>
+                            <item>
+                             <property name="text">
+                                <string>轨道 1（chi）</string>
+                             </property>
+                            </item>
+                            <item>
+                             <property name="text">
+                                <string>轨道 2（eng）</string>
+                             </property>
+                            </item>
+                            <item>
+                             <property name="text">
+                                <string>不使用内嵌轨道</string>
+                             </property>
+                            </item>
+                         </widget>
+                        </item>
+                        <item row="1" column="0">
+                         <widget class="QLabel" name="mergeLabel">
+                            <property name="text">
+                             <string>轨道合并</string>
+                            </property>
+                         </widget>
+                        </item>
+                        <item row="1" column="1">
+                         <layout class="QHBoxLayout" name="mergeRow">
+                            <property name="spacing">
+                             <number>8</number>
+                            </property>
+                            <item>
+                             <widget class="QCheckBox" name="mergeTracksCheckBox">
+                              <property name="sizePolicy">
+                               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                                <horstretch>0</horstretch>
+                                <verstretch>0</verstretch>
+                               </sizepolicy>
+                              </property>
+                                <property name="text">
+                                 <string>合并内嵌与外部字幕</string>
+                                </property>
+                             </widget>
+                            </item>
+                            <item>
+                             <widget class="QCheckBox" name="keepAudioCheckBox">
+                              <property name="sizePolicy">
+                               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                                <horstretch>0</horstretch>
+                                <verstretch>0</verstretch>
+                               </sizepolicy>
+                              </property>
+                                <property name="text">
+                                 <string>保留原音轨</string>
+                                </property>
+                                <property name="checked">
+                                 <bool>true</bool>
+                                </property>
+                             </widget>
+                            </item>
+                         </layout>
+                        </item>
+                        <item row="2" column="0">
+                         <widget class="QLabel" name="modeLabel">
+                            <property name="text">
+                             <string>输出模式</string>
+                            </property>
+                         </widget>
+                        </item>
+                        <item row="2" column="1">
+                         <widget class="QComboBox" name="burnModeComboBox">
+                          <property name="sizePolicy">
+                           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                            <horstretch>0</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                            <item>
+                             <property name="text">
+                                <string>硬字幕（烧录）</string>
+                             </property>
+                            </item>
+                            <item>
+                             <property name="text">
+                                <string>软封装（内嵌轨道）</string>
+                             </property>
+                            </item>
+                            <item>
+                             <property name="text">
+                                <string>替换字幕轨道</string>
+                             </property>
+                            </item>
+                         </widget>
+                        </item>
+                     </layout>
+                    </item>
+                    <item>
+                     <layout class="QGridLayout" name="outputGrid">
+                      <property name="horizontalSpacing">
+                       <number>8</number>
+                      </property>
+                      <property name="verticalSpacing">
+                       <number>8</number>
+                      </property>
+                      <item row="0" column="0">
+                       <widget class="QLabel" name="containerLabel">
+                        <property name="text">
+                         <string>封装格式</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="0" column="1">
+                       <layout class="QHBoxLayout" name="outputTopRow">
+                        <property name="spacing">
+                         <number>8</number>
+                        </property>
+                        <item>
+                         <widget class="QComboBox" name="containerComboBox">
+                          <item>
+                           <property name="text">
+                            <string>mp4</string>
+                           </property>
+                          </item>
+                          <item>
+                           <property name="text">
+                            <string>mkv</string>
+                           </property>
+                          </item>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QPushButton" name="advancedOptionsButton">
+                          <property name="text">
+                           <string>高级输出选项</string>
+                          </property>
+                         </widget>
+                        </item>
+                       </layout>
+                      </item>
+                      <item row="1" column="0">
+                       <widget class="QLabel" name="outputPathLabel">
+                        <property name="text">
+                         <string>输出路径</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="1" column="1">
+                       <layout class="QHBoxLayout" name="outputPathRow">
+                        <property name="spacing">
+                         <number>8</number>
+                        </property>
+                        <item>
+                         <widget class="QLineEdit" name="outputPathLineEdit">
+                          <property name="placeholderText">
+                           <string>选择输出文件路径</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QPushButton" name="browseOutputButton">
+                          <property name="text">
+                           <string>浏览</string>
+                          </property>
+                         </widget>
+                        </item>
+                       </layout>
+                      </item>
+                     </layout>
+                    </item>
+                 </layout>
+                </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="cardBottomSpacer">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>6</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+         </layout>
+        </widget>
+     </item>
+     <item>
+        <widget class="QFrame" name="logFrame">
+         <layout class="QVBoxLayout" name="logLayout">
+            <property name="spacing">
+             <number>10</number>
+            </property>
+            <property name="leftMargin">
+             <number>16</number>
+            </property>
+            <property name="topMargin">
+             <number>16</number>
+            </property>
+            <property name="rightMargin">
+             <number>16</number>
+            </property>
+            <property name="bottomMargin">
+             <number>16</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="logTitleLabel">
+                <property name="styleSheet">
+                 <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
+                </property>
+                <property name="text">
+                 <string>压制日志与状态</string>
+                </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QTextEdit" name="logTextEdit">
+                <property name="minimumSize">
+                 <size>
+                    <width>0</width>
+                    <height>180</height>
+                 </size>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+             </widget>
+            </item>
+         </layout>
+        </widget>
+     </item>
+    </layout>
  </widget>
- <pixmapfunction/>
+ <resources/>
  <connections/>
 </ui>
