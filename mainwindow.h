@@ -3,6 +3,13 @@
 
 #include <QMainWindow>
 
+#include <QVector>
+
+class QTimer;
+#ifdef Q_OS_WIN
+#include <pdh.h>
+#endif
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -17,5 +24,19 @@ public:
 
 private:
     Ui::MainWindow *ui;
+    QTimer *perfTimer = nullptr;
+
+    void setupPerformanceCounters();
+    void updatePerformanceMetrics();
+    void teardownPerformanceCounters();
+
+#ifdef Q_OS_WIN
+    PDH_HQUERY perfQuery = nullptr;
+    PDH_HCOUNTER cpuCounter = nullptr;
+    PDH_HCOUNTER ramCounter = nullptr;
+    QVector<PDH_HCOUNTER> gpuCounters;
+    QVector<PDH_HCOUNTER> vramUsageCounters;
+    QVector<PDH_HCOUNTER> vramLimitCounters;
+#endif
 };
 #endif // MAINWINDOW_H

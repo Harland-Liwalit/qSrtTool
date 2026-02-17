@@ -425,7 +425,7 @@ QPushButton:hover { background-color: #F0F2F5; }</string>
             <string notr="true">color: #E8EAED; font-weight: 600;</string>
            </property>
            <property name="text">
-            <string>CPU: 45% | RAM: 1.2GB</string>
+            <string>CPU: 45% | GPU: 30% | RAM: 55% | VRAM: 40%</string>
            </property>
           </widget>
          </item>
