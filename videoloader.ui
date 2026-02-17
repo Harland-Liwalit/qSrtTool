@@ -13,10 +13,10 @@
   <property name="windowTitle">
    <string>VideoLoader</string>
   </property>
- <layout class="QVBoxLayout" name="previewLayout">
-  <property name="spacing">
-   <number>20</number>
-  </property>
+  <layout class="QVBoxLayout" name="previewLayout">
+   <property name="spacing">
+    <number>20</number>
+   </property>
    <property name="leftMargin">
     <number>0</number>
    </property>
@@ -29,78 +29,78 @@
    <property name="bottomMargin">
     <number>0</number>
    </property>
-    <item>
-     <widget class="QFrame" name="videoPlaceholder">
-        <property name="minimumSize">
-         <size>
-            <width>840</width>
-            <height>460</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">background-color: #2A2F36; border-radius: 12px;</string>
-        </property>
-     </widget>
-    </item>
-    <item>
-     <layout class="QHBoxLayout" name="actionLayout">
-        <property name="spacing">
-         <number>12</number>
-        </property>
-        <item>
-         <spacer name="leftActionSpacer">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-                <width>40</width>
-                <height>20</height>
-             </size>
-            </property>
-         </spacer>
-        </item>
-        <item>
-         <widget class="QPushButton" name="importVideoButton">
-            <property name="minimumSize">
-             <size>
-                <width>160</width>
-                <height>40</height>
-             </size>
-            </property>
-            <property name="text">
-             <string>导入视频</string>
-            </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="nextStepButton">
-            <property name="minimumSize">
-             <size>
-                <width>160</width>
-                <height>40</height>
-             </size>
-            </property>
-            <property name="text">
-             <string>转到下一步</string>
-            </property>
-         </widget>
-        </item>
-        <item>
-         <spacer name="rightActionSpacer">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-                <width>40</width>
-                <height>20</height>
-             </size>
-            </property>
-         </spacer>
-        </item>
-     </layout>
-    </item>
+   <item>
+    <widget class="QFrame" name="videoPlaceholder">
+     <property name="minimumSize">
+      <size>
+       <width>840</width>
+       <height>460</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: #2A2F36; border-radius: 12px;</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="actionLayout">
+     <property name="spacing">
+      <number>12</number>
+     </property>
+     <item>
+      <spacer name="leftActionSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="importVideoButton">
+       <property name="minimumSize">
+        <size>
+         <width>160</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>导入视频</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="nextStepButton">
+       <property name="minimumSize">
+        <size>
+         <width>160</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>转到下一步</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="rightActionSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
   </layout>
  </widget>
  <resources/>
