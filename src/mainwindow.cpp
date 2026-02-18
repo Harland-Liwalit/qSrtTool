@@ -25,13 +25,13 @@ static QStringList expandPdhPaths(const wchar_t *wildcardPath)
 {
     DWORD bufferSize = 0;
     PDH_STATUS status = PdhExpandWildCardPathW(nullptr, wildcardPath, nullptr, &bufferSize, 0);
-    if (status != PDH_MORE_DATA || bufferSize == 0) {
+    if (status != static_cast<PDH_STATUS>(PDH_MORE_DATA) || bufferSize == 0) {
         return {};
     }
 
     QVector<wchar_t> buffer(static_cast<int>(bufferSize));
     status = PdhExpandWildCardPathW(nullptr, wildcardPath, buffer.data(), &bufferSize, 0);
-    if (status != ERROR_SUCCESS) {
+    if (status != static_cast<PDH_STATUS>(ERROR_SUCCESS)) {
         return {};
     }
 

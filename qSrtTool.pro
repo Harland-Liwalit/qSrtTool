@@ -17,32 +17,32 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
-    main.cpp \
-    mainwindow.cpp \
-    outputmanagement.cpp \
-    subtitleburning.cpp \
-    subtitleextraction.cpp \
-    subtitletranslation.cpp \
-    videodownloader.cpp \
-    videoloader.cpp
+    src/main.cpp \
+    src/mainwindow.cpp \
+    src/Modules/OutputMgr/outputmanagement.cpp \
+    src/Modules/Burner/subtitleburning.cpp \
+    src/Modules/Whisper/subtitleextraction.cpp \
+    src/Modules/Translator/subtitletranslation.cpp \
+    src/Modules/Downloder/videodownloader.cpp \
+    src/Modules/Loader/videoloader.cpp
 
 HEADERS += \
-    mainwindow.h \
-    outputmanagement.h \
-    subtitleburning.h \
-    subtitleextraction.h \
-    subtitletranslation.h \
-    videodownloader.h \
-    videoloader.h
+    src/mainwindow.h \
+    src/Modules/OutputMgr/outputmanagement.h \
+    src/Modules/Burner/subtitleburning.h \
+    src/Modules/Whisper/subtitleextraction.h \
+    src/Modules/Translator/subtitletranslation.h \
+    src/Modules/Downloder/videodownloader.h \
+    src/Modules/Loader/videoloader.h
 
 FORMS += \
-    mainwindow.ui \
-    outputmanagement.ui \
-    subtitleburning.ui \
-    subtitleextraction.ui \
-    subtitletranslation.ui \
-    videodownloader.ui \
-    videoloader.ui
+    src/mainwindow.ui \
+    src/Modules/OutputMgr/outputmanagement.ui \
+    src/Modules/Burner/subtitleburning.ui \
+    src/Modules/Whisper/subtitleextraction.ui \
+    src/Modules/Translator/subtitletranslation.ui \
+    src/Modules/Downloder/videodownloader.ui \
+    src/Modules/Loader/videoloader.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -50,4 +50,4 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
 RESOURCES += \
-    style.qrc
+    resources/style.qrc

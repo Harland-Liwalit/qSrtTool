@@ -248,41 +248,7 @@ QPushButton:hover { background-color: #F0F2F5; }</string>
 QPushButton:hover { background-color: #F0F2F5; }</string>
           </property>
           <property name="text">
-           <string>字幕</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="menuTranslateButton">
-          <property name="minimumSize">
-           <size>
-            <width>80</width>
-            <height>34</height>
-           </size>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QPushButton { background-color: #FFFFFF; color: #2B2F33; border: 1px solid #D7DADF; border-radius: 8px; padding: 6px 16px; font: 11pt &quot;Microsoft YaHei&quot;; }
-QPushButton:hover { background-color: #F0F2F5; }</string>
-          </property>
-          <property name="text">
-           <string>翻译</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="menuBurnButton">
-          <property name="minimumSize">
-           <size>
-            <width>80</width>
-            <height>34</height>
-           </size>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QPushButton { background-color: #FFFFFF; color: #2B2F33; border: 1px solid #D7DADF; border-radius: 8px; padding: 6px 16px; font: 11pt &quot;Microsoft YaHei&quot;; }
-QPushButton:hover { background-color: #F0F2F5; }</string>
-          </property>
-          <property name="text">
-           <string>烧录</string>
+           <string>编辑</string>
           </property>
          </widget>
         </item>
