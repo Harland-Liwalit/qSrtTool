@@ -1,0 +1,38 @@
+# Build directories (Qt Creator and generic build outputs)
+/build/
+/build-*/
+
+# Qt Creator user/session files
+*.pro.user
+*.pro.user.*
+*.user
+*.user.*
+*.autosave
+
+# Qt generated files (if build output lands in source tree)
+/moc_*.cpp
+/ui_*.h
+/qrc_*.cpp
+
+# Compiler/linker outputs
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
+*.pdb
+*.ilk
+
+# Local dependencies and tools (binary-only, not for VCS)
+/deps/
+
+# Runtime data (privacy or large outputs)
+/models/*
+!/models/.gitkeep
+/temp/*
+!/temp/.gitkeep
+/output/*
+!/output/.gitkeep
