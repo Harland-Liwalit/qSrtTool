@@ -2,6 +2,9 @@
 #define SUBTITLEEXTRACTION_H
 
 #include <QWidget>
+#include <QIcon>
+
+class QTimer;
 
 namespace Ui {
 class SubtitleExtraction;
@@ -17,6 +20,13 @@ public:
 
 private:
     Ui::SubtitleExtraction *ui;
+    QTimer *m_toolsSpinTimer = nullptr;
+    QIcon m_toolsBaseIcon;
+    int m_toolsSpinAngle = 0;
+    bool m_toolsLoading = false;
+
+    void setToolsLoading(bool loading);
+    void updateToolsSpinner();
 };
 
 #endif // SUBTITLEEXTRACTION_H

@@ -1,0 +1,34 @@
+{
+  "dependencies": [
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg",
+      "executable": "ffmpeg.exe",
+      "versionArg": "-version",
+      "versionPattern": "ffmpeg version ([\\d\\.]+)",
+      "latestVersionApi": "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest",
+      "downloadUrlTemplate": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+      "minVersion": "6.0"
+    },
+    {
+      "id": "yt-dlp",
+      "name": "yt-dlp",
+      "executable": "yt-dlp.exe",
+      "versionArg": "--version",
+      "versionPattern": "([\\d\\.]+)",
+      "latestVersionApi": "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest",
+      "downloadUrlTemplate": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
+      "minVersion": "2024.0.0"
+    },
+    {
+      "id": "whisper",
+      "name": "whisper.cpp",
+      "executable": "whisper.exe",
+      "versionArg": "--version",
+      "versionPattern": "version: ([\\d\\.]+)",
+      "latestVersionApi": "https://api.github.com/repos/ggerganov/whisper.cpp/releases/latest",
+      "downloadUrlTemplate": "https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-bin-x64.zip",
+      "minVersion": "1.0"
+    }
+  ]
+}

@@ -4,15 +4,21 @@
 #include <QButtonGroup>
 #include <QTimer>
 #include <QToolButton>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QMessageBox>
 
 #include <QtGlobal>
 
-#include "outputmanagement.h"
-#include "subtitleburning.h"
-#include "subtitleextraction.h"
-#include "subtitletranslation.h"
-#include "videodownloader.h"
-#include "videoloader.h"
+#include "Modules/OutputMgr/outputmanagement.h"
+#include "Modules/Burner/subtitleburning.h"
+#include "Modules/Whisper/subtitleextraction.h"
+#include "Modules/Translator/subtitletranslation.h"
+#include "Modules/Downloder/videodownloader.h"
+#include "Modules/Loader/videoloader.h"
+#include "Core/dependencymanager.h"
 
 #ifdef Q_OS_WIN
 #include <Windows.h>
@@ -70,6 +76,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    initializeDependencies();
+
     QWidget *placeholder = ui->mainStackedWidget->findChild<QWidget *>("pagePlaceholder");
     if (placeholder) {
         ui->mainStackedWidget->removeWidget(placeholder);
@@ -112,8 +120,49 @@ MainWindow::MainWindow(QWidget *parent)
     bindNav(ui->navBurnButton, burnPage);
     bindNav(ui->navOutputButton, outputPage);
 
+    connect(ui->navDownloadButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
+    connect(ui->navWhisperButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
+    connect(ui->navBurnButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
+
     ui->navPreviewButton->setChecked(true);
     ui->mainStackedWidget->setCurrentWidget(loaderPage);
+
+    auto &depManager = DependencyManager::instance();
+    connect(&depManager, &DependencyManager::busyChanged, this, [this](bool busy) {
+        setStatusHint(busy ? tr("正在检查/下载依赖...") : tr("依赖检查完成"));
+    });
+    connect(&depManager, &DependencyManager::updateCheckFailed, this, [this](const QString &error) {
+        setStatusHint(tr("依赖检查失败: %1").arg(error));
+        QMessageBox::warning(this, tr("依赖检查失败"), error);
+    });
+    connect(&depManager, &DependencyManager::updateCheckFinished, this, [this]() {
+        const auto deps = DependencyManager::instance().getAllDependencies();
+        bool hasUpdates = false;
+        for (const auto &info : deps) {
+            if (info.needsUpdate) {
+                hasUpdates = true;
+                break;
+            }
+        }
+        setStatusHint(hasUpdates ? tr("发现更新，开始下载...") : tr("依赖已是最新"));
+    });
+    connect(&depManager, &DependencyManager::downloadFinished, this, [this](const QString &depId, const QString &savePath) {
+        Q_UNUSED(savePath);
+        QString name = depId;
+        const auto deps = DependencyManager::instance().getAllDependencies();
+        for (const auto &info : deps) {
+            if (info.id == depId) {
+                name = info.name.isEmpty() ? depId : info.name;
+                break;
+            }
+        }
+        setStatusHint(tr("下载完成: %1").arg(name));
+    });
+    connect(&depManager, &DependencyManager::downloadFailed, this, [this](const QString &depId, const QString &error) {
+        Q_UNUSED(depId);
+        setStatusHint(tr("依赖下载失败: %1").arg(error));
+        QMessageBox::warning(this, tr("依赖下载失败"), error);
+    });
 
     setupPerformanceCounters();
     perfTimer = new QTimer(this);
@@ -246,5 +295,48 @@ void MainWindow::teardownPerformanceCounters()
         perfQuery = nullptr;
     }
 #endif
+}
+
+void MainWindow::initializeDependencies()
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString appPath = QDir(appDir).filePath("resources/dependencies.json");
+    const QString cwdPath = QDir::currentPath() + "/resources/dependencies.json";
+    const QString resourcePath = ":/resources/dependencies.json";
+
+    QString resolvedPath;
+    if (QFileInfo::exists(appPath)) {
+        resolvedPath = appPath;
+    } else if (QFileInfo::exists(cwdPath)) {
+        resolvedPath = cwdPath;
+    } else if (QFile::exists(resourcePath)) {
+        resolvedPath = resourcePath;
+    }
+
+    if (!resolvedPath.isEmpty()) {
+        DependencyManager::instance().initialize(resolvedPath);
+        setStatusHint(tr("依赖清单已加载"));
+    } else {
+        setStatusHint(tr("未找到依赖清单: resources/dependencies.json"));
+        QMessageBox::warning(this, tr("依赖清单缺失"), tr("未找到 resources/dependencies.json，无法检查依赖更新。"));
+    }
+}
+
+void MainWindow::triggerDependencyCheckOnce()
+{
+    if (m_dependencyAutoTriggered) {
+        return;
+    }
+
+    m_dependencyAutoTriggered = true;
+    DependencyManager::instance().checkForUpdates();
+}
+
+void MainWindow::setStatusHint(const QString &message)
+{
+    if (!ui || !ui->statusHintLabel) {
+        return;
+    }
+    ui->statusHintLabel->setText(message);
 }
 

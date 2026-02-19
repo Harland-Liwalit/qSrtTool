@@ -2,6 +2,9 @@
 #define SUBTITLEBURNING_H
 
 #include <QWidget>
+#include <QIcon>
+
+class QTimer;
 
 namespace Ui {
 class SubtitleBurning;
@@ -17,6 +20,13 @@ public:
 
 private:
     Ui::SubtitleBurning *ui;
+    QTimer *m_toolsSpinTimer = nullptr;
+    QIcon m_toolsBaseIcon;
+    int m_toolsSpinAngle = 0;
+    bool m_toolsLoading = false;
+
+    void setToolsLoading(bool loading);
+    void updateToolsSpinner();
 };
 
 #endif // SUBTITLEBURNING_H

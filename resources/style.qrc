@@ -15,4 +15,7 @@
         <file>style/QSS_IMG/go-up-symbolic.symbolic.png</file>
         <file>style/QSS_IMG/object-select-symbolic.symbolic.png</file>
     </qresource>
+    <qresource prefix="/resources">
+        <file>dependencies.json</file>
+    </qresource>
 </RCC>

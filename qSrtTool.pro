@@ -1,4 +1,4 @@
-QT       += core gui
+QT       += core gui network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -17,6 +17,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    src/Core/dependencymanager.cpp \
     src/main.cpp \
     src/mainwindow.cpp \
     src/Modules/OutputMgr/outputmanagement.cpp \
@@ -27,6 +28,7 @@ SOURCES += \
     src/Modules/Loader/videoloader.cpp
 
 HEADERS += \
+    src/Core/dependencymanager.h \
     src/mainwindow.h \
     src/Modules/OutputMgr/outputmanagement.h \
     src/Modules/Burner/subtitleburning.h \
