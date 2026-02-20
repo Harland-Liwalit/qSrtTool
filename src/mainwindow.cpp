@@ -19,6 +19,7 @@
 #include "Modules/Downloder/videodownloader.h"
 #include "Modules/Loader/videoloader.h"
 #include "Core/dependencymanager.h"
+#include "Widgets/pageswitchconfirmdialog.h"
 
 #ifdef Q_OS_WIN
 #include <Windows.h>
@@ -91,6 +92,8 @@ MainWindow::MainWindow(QWidget *parent)
     SubtitleBurning *burnPage = new SubtitleBurning(this);
     OutputManagement *outputPage = new OutputManagement(this);
 
+    m_loaderPage = loaderPage;
+
     ui->mainStackedWidget->addWidget(downloadPage);
     ui->mainStackedWidget->addWidget(loaderPage);
     ui->mainStackedWidget->addWidget(whisperPage);
@@ -107,18 +110,12 @@ MainWindow::MainWindow(QWidget *parent)
     navGroup->addButton(ui->navBurnButton);
     navGroup->addButton(ui->navOutputButton);
 
-    auto bindNav = [this](QToolButton *button, QWidget *page) {
-        connect(button, &QToolButton::clicked, this, [this, page]() {
-            ui->mainStackedWidget->setCurrentWidget(page);
-        });
-    };
-
-    bindNav(ui->navDownloadButton, downloadPage);
-    bindNav(ui->navPreviewButton, loaderPage);
-    bindNav(ui->navWhisperButton, whisperPage);
-    bindNav(ui->navTranslateButton, translatePage);
-    bindNav(ui->navBurnButton, burnPage);
-    bindNav(ui->navOutputButton, outputPage);
+    bindNavigationButton(ui->navDownloadButton, downloadPage, tr("视频下载"));
+    bindNavigationButton(ui->navPreviewButton, loaderPage, tr("视频预览"));
+    bindNavigationButton(ui->navWhisperButton, whisperPage, tr("字幕提取"));
+    bindNavigationButton(ui->navTranslateButton, translatePage, tr("字幕翻译"));
+    bindNavigationButton(ui->navBurnButton, burnPage, tr("字幕烧录"));
+    bindNavigationButton(ui->navOutputButton, outputPage, tr("输出管理"));
 
     connect(loaderPage, &VideoLoader::statusMessage, this, &MainWindow::setStatusHint);
 
@@ -340,5 +337,136 @@ void MainWindow::setStatusHint(const QString &message)
         return;
     }
     ui->statusHintLabel->setText(message);
+}
+
+/// @brief 绑定侧边导航按钮的点击事件到页面切换逻辑
+/// @details 记录按钮和页面的映射关系，当点击按钮时触发任务确认流程
+void MainWindow::bindNavigationButton(QToolButton *button, QWidget *page, const QString &featureName)
+{
+    if (!button || !page) {
+        return;
+    }
+
+    m_navToPage[button] = page;
+    m_navFeatureNames[button] = featureName;
+
+    connect(button, &QToolButton::clicked, this, [this, page, featureName]() {
+        requestPageSwitch(page, featureName);
+    });
+}
+
+/// @brief 处理页面切换请求，支持任务确认弹窗和自动停止
+/// @details 逻辑流程：
+/// 1. 如已经在目标页面，直接返回
+/// 2. 获取当前页面，判断是否有正在运行的任务
+/// 3. 若无任务，直接切换
+/// 4. 若有任务但用户已勾选过"不再提示"（程序运行期间永久生效），直接停止任务并切换
+/// 5. 若有任务且未勾选跳过，弹窗询问用户
+/// 6. 用户确认后停止当前页所有任务，切换到目标页
+/// 7. 如果用户勾选"不再提示"，后续整个程序运行期间都不再弹窗
+void MainWindow::requestPageSwitch(QWidget *targetPage, const QString &featureName)
+{
+    if (!ui || !ui->mainStackedWidget || !targetPage) {
+        return;
+    }
+
+    if (ui->mainStackedWidget->currentWidget() == targetPage) {
+        return;
+    }
+
+    QWidget *currentPage = ui->mainStackedWidget->currentWidget();
+    if (!currentPage) {
+        ui->mainStackedWidget->setCurrentWidget(targetPage);
+        syncNavigationSelection(targetPage);
+        return;
+    }
+
+    const bool hasTasks = hasActiveTasksOnPage(currentPage);
+    
+    // 如果当前页面没有任务，直接切换
+    if (!hasTasks) {
+        ui->mainStackedWidget->setCurrentWidget(targetPage);
+        syncNavigationSelection(targetPage);
+        return;
+    }
+
+    // 有任务但用户已勾选"不再提示"（程序运行期间永久生效），直接停止任务并切换
+    if (m_skipPromptForCurrentTask) {
+        stopAllTasksOnPage(currentPage);
+        ui->mainStackedWidget->setCurrentWidget(targetPage);
+        syncNavigationSelection(targetPage);
+        return;
+    }
+
+    // 有任务且需要提示，显示确认对话框
+    PageSwitchConfirmDialog dialog(this);
+    dialog.setTargetName(featureName);
+
+    const int result = dialog.exec();
+    if (result != QDialog::Accepted) {
+        syncNavigationSelection(currentPage);
+        return;
+    }
+
+    if (dialog.skipPromptForCurrentTask()) {
+        m_skipPromptForCurrentTask = true;
+    }
+
+    stopAllTasksOnPage(currentPage);
+    ui->mainStackedWidget->setCurrentWidget(targetPage);
+    syncNavigationSelection(targetPage);
+}
+
+/// @brief 判断指定页面上是否有运行中的任务
+/// @details 根据页面类型调用对应的任务状态查询接口
+bool MainWindow::hasActiveTasksOnPage(QWidget *page) const
+{
+    if (!page) {
+        return false;
+    }
+
+    if (page == m_loaderPage && m_loaderPage) {
+        return m_loaderPage->hasRunningTask();
+    }
+
+    return DependencyManager::instance().isBusy();
+}
+
+/// @brief 停止指定页面上所有正在运行的任务
+/// @details 根据页面类型调用对应的停止方法
+void MainWindow::stopAllTasksOnPage(QWidget *page)
+{
+    if (!page) {
+        return;
+    }
+
+    if (page == m_loaderPage && m_loaderPage) {
+        m_loaderPage->stopAllTasks();
+    }
+
+    if (DependencyManager::instance().isBusy()) {
+        DependencyManager::instance().cancelAllOperations();
+    }
+}
+
+/// @brief 根据当前页面同步左侧导航按钮的选中状态
+/// @details 确保切换后视觉状态与实际页面一致
+void MainWindow::syncNavigationSelection(QWidget *page)
+{
+    if (!page) {
+        return;
+    }
+
+    for (auto it = m_navToPage.constBegin(); it != m_navToPage.constEnd(); ++it) {
+        QToolButton *button = it.key();
+        if (!button) {
+            continue;
+        }
+
+        if (it.value() == page) {
+            button->setChecked(true);
+            return;
+        }
+    }
 }
 

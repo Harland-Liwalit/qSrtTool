@@ -20,6 +20,7 @@ SOURCES += \
     src/Core/dependencymanager.cpp \
     src/Modules/Loader/embeddedffmpegplayer.cpp \
     src/Widgets/logconsole.cpp \
+    src/Widgets/pageswitchconfirmdialog.cpp \
     src/Widgets/progressbox.cpp \
     src/main.cpp \
     src/mainwindow.cpp \
@@ -34,6 +35,7 @@ HEADERS += \
     src/Core/dependencymanager.h \
     src/Modules/Loader/embeddedffmpegplayer.h \
     src/Widgets/logconsole.h \
+    src/Widgets/pageswitchconfirmdialog.h \
     src/Widgets/progressbox.h \
     src/mainwindow.h \
     src/Modules/OutputMgr/outputmanagement.h \

@@ -32,6 +32,13 @@ public:
     explicit VideoLoader(QWidget *parent = nullptr);
     ~VideoLoader();
 
+    /// @brief 当前页面是否有运行中的任务
+    /// @return 有任务运行返回true，否则false
+    bool hasRunningTask() const;
+
+    /// @brief 停止当前页面所有任务
+    void stopAllTasks();
+
 signals:
     /// @brief 播放器状态消息信号
     /// @param message 状态信息文本

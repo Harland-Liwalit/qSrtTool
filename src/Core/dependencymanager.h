@@ -45,6 +45,12 @@ public:
     // 检查更新（联网）
     void checkForUpdates();
 
+    // 当前是否有正在执行的依赖任务
+    bool isBusy() const;
+
+    // 取消当前所有依赖相关网络任务
+    void cancelAllOperations();
+
     // 下载更新
     void downloadUpdate(const QString& depId, const QString& savePath);
 

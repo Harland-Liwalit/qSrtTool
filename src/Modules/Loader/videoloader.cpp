@@ -80,6 +80,22 @@ VideoLoader::~VideoLoader()
     delete ui;
 }
 
+bool VideoLoader::hasRunningTask() const
+{
+    if (!m_player) {
+        return false;
+    }
+    return m_player->isPlaying();
+}
+
+void VideoLoader::stopAllTasks()
+{
+    if (!m_player) {
+        return;
+    }
+    m_player->stopPlayback();
+}
+
 void VideoLoader::dragEnterEvent(QDragEnterEvent *event)
 {
     // 处理拖入事件 - 验证拖入的数据是否包含本地视频文件

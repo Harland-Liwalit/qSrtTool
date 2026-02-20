@@ -153,6 +153,28 @@ void DependencyManager::checkForUpdates() {
     }
 }
 
+bool DependencyManager::isBusy() const
+{
+    return m_busy;
+}
+
+void DependencyManager::cancelAllOperations()
+{
+    const QList<QNetworkReply *> replies = m_netManager->findChildren<QNetworkReply *>();
+    for (QNetworkReply *reply : replies) {
+        if (!reply) {
+            continue;
+        }
+        disconnect(reply, nullptr, this, nullptr);
+        reply->abort();
+        reply->deleteLater();
+    }
+
+    m_pendingVersionReplies = 0;
+    m_pendingDownloads = 0;
+    setBusy(false);
+}
+
 void DependencyManager::onVersionReplyFinished() {
     QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
     if (!reply)

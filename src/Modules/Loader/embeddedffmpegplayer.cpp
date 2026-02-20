@@ -198,6 +198,11 @@ QString EmbeddedFfmpegPlayer::currentFilePath() const
     return m_currentFilePath;
 }
 
+bool EmbeddedFfmpegPlayer::isPlaying() const
+{
+    return m_isPlaying;
+}
+
 /// @brief 播放/暂停切换
 /// 
 /// 调用链：

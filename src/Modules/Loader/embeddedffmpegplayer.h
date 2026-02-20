@@ -39,6 +39,10 @@ public:
     /// @return 完整路径，如果未加载返回空字符串
     QString currentFilePath() const;
 
+    /// @brief 当前是否处于播放中状态
+    /// @return 正在播放返回true，否则false
+    bool isPlaying() const;
+
 public slots:
     /// @brief 播放/暂停切换
     /// @details 如果当前未播放则开始从当前位置播放；如果正在播放则暂停
