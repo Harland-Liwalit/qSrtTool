@@ -1,7 +1,7 @@
 #include "videoloader.h"
 #include "ui_videoloader.h"
 
-#include "mediacontroller.h"
+#include "embeddedffmpegplayer.h"
 
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -12,11 +12,18 @@
 #include <QMimeData>
 #include <QPushButton>
 #include <QUrl>
-#include <QVideoWidget>
 #include <QVBoxLayout>
 
 #include "../../Core/dependencymanager.h"
 
+/// @brief VideoLoader构造函数 - 初始化视频导入界面
+/// 
+/// 初始化流程：
+/// 1. 创建UI
+/// 2. 启用拖放功能
+/// 3. 创建EmbeddedFfmpegPlayer实例并嵌入到占位符中
+/// 4. 连接播放器信号到UI更新和事件处理
+/// 5. 连接依赖管理器信号处理FFmpeg下载
 VideoLoader::VideoLoader(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::VideoLoader)
@@ -31,30 +38,26 @@ VideoLoader::VideoLoader(QWidget *parent) :
     placeholderLayout->setContentsMargins(0, 0, 0, 0);
     placeholderLayout->setSpacing(0);
 
-    m_videoWidget = new QVideoWidget(ui->videoPlaceholder);
-    placeholderLayout->addWidget(m_videoWidget);
-
-    m_mediaController = new MediaController(this);
-    m_mediaController->setVideoOutput(m_videoWidget);
+    m_player = new EmbeddedFfmpegPlayer(ui->videoPlaceholder);
+    placeholderLayout->addWidget(m_player);
 
     connect(ui->importVideoButton, &QPushButton::clicked, this, &VideoLoader::onImportVideoClicked);
-    connect(m_mediaController, &MediaController::mediaLoadFailed, this, [this](const QString &reason) {
-        if (reason.contains("ffplay.exe", Qt::CaseInsensitive)) {
-            const auto result = QMessageBox::question(
-                this,
-                tr("缺少 FFmpeg"),
-                tr("未找到 ffplay.exe，是否下载 FFmpeg 到 deps 目录？"));
-            if (result == QMessageBox::Yes) {
-                const QString savePath = QDir::currentPath() + "/deps/ffmpeg.zip";
-                DependencyManager::instance().downloadUpdate("ffmpeg", savePath);
-                emit statusMessage(tr("正在下载 FFmpeg..."));
-                return;
-            }
-        }
-        QMessageBox::warning(this, tr("加载失败"), reason);
-        emit statusMessage(tr("加载失败: %1").arg(reason));
+    connect(m_player, &EmbeddedFfmpegPlayer::playbackError, this, [this](const QString &reason) {
+        QMessageBox::warning(this, tr("播放失败"), reason);
+        emit statusMessage(tr("播放失败: %1").arg(reason));
     });
-    connect(m_mediaController, &MediaController::mediaStatusMessage, this, &VideoLoader::statusMessage);
+    connect(m_player, &EmbeddedFfmpegPlayer::statusMessage, this, &VideoLoader::statusMessage);
+    connect(m_player, &EmbeddedFfmpegPlayer::ffmpegMissing, this, [this]() {
+        const auto result = QMessageBox::question(
+            this,
+            tr("缺少 FFmpeg"),
+            tr("未找到 ffmpeg.exe，是否下载 FFmpeg 到 deps 目录？"));
+        if (result == QMessageBox::Yes) {
+            const QString savePath = QDir::currentPath() + "/deps/ffmpeg.zip";
+            DependencyManager::instance().downloadUpdate("ffmpeg", savePath);
+            emit statusMessage(tr("正在下载 FFmpeg..."));
+        }
+    });
 
     auto &depManager = DependencyManager::instance();
     connect(&depManager, &DependencyManager::downloadFinished, this, [this](const QString &depId, const QString &) {
@@ -79,6 +82,11 @@ VideoLoader::~VideoLoader()
 
 void VideoLoader::dragEnterEvent(QDragEnterEvent *event)
 {
+    // 处理拖入事件 - 验证拖入的数据是否包含本地视频文件
+    // 流程：
+    // 1. 检查MIME数据中是否有URL
+    // 2. 提取本地文件路径
+    // 3. 如果包含有效文件，接受拖放操作并改变UI视觉反馈
     if (!event || !event->mimeData()) {
         return;
     }
@@ -90,6 +98,11 @@ void VideoLoader::dragEnterEvent(QDragEnterEvent *event)
 
 void VideoLoader::dropEvent(QDropEvent *event)
 {
+    // 处理拖放事件 - 用户松开鼠标时加载拖入的视频文件
+    // 流程：
+    // 1. 从MIME数据中提取文件路径
+    // 2. 验证文件有效性
+    // 3. 调用loadVideo()加载视频
     if (!event || !event->mimeData()) {
         return;
     }
@@ -105,6 +118,7 @@ void VideoLoader::dropEvent(QDropEvent *event)
 
 void VideoLoader::dragMoveEvent(QDragMoveEvent *event)
 {
+    // 处理拖移事件 - 当鼠标在窗口上移动时维持视觉反馈
     if (!event || !event->mimeData()) {
         return;
     }
@@ -135,6 +149,12 @@ bool VideoLoader::eventFilter(QObject *watched, QEvent *event)
     return QWidget::eventFilter(watched, event);
 }
 
+/// @brief 点击"导入视频"按钮的处理函数
+/// 
+/// 流程：
+/// 1. 打开文件对话框，用户选择视频文件
+/// 2. 获取选定的文件路径
+/// 3. 调用loadVideo()加载视频
 void VideoLoader::onImportVideoClicked()
 {
     emit statusMessage(tr("正在选择视频..."));
@@ -154,17 +174,30 @@ void VideoLoader::onImportVideoClicked()
 
 void VideoLoader::loadVideo(const QString &filePath)
 {
-    if (!m_mediaController) {
+    // 加载并播放视频文件
+    // 调用链：onImportVideoClicked()/dropEvent() -> loadVideo() -> m_player->loadVideo()
+    // 
+    // 流程：
+    // 1. 检查m_player是否有效
+    // 2. 调用EmbeddedFfmpegPlayer::loadVideo()加载视频
+    // 3. 加载成功后自动开始播放
+    if (!m_player) {
         return;
     }
 
     emit statusMessage(tr("已选择视频，准备加载..."));
-    if (!m_mediaController->loadVideo(filePath)) {
+    if (!m_player->loadVideo(filePath)) {
         return;
     }
-    m_mediaController->play();
+    m_player->playPause();
 }
 
+/// @brief 从拖放的MIME数据中提取本地文件路径
+/// 
+/// 流程：
+/// 1. 检查MIME数据中是否包含URL列表
+/// 2. 遍历所有URL，寻找本地文件URL
+/// 3. 返回第一个本地文件路径
 QString VideoLoader::extractDroppedLocalFile(const QMimeData *mimeData) const
 {
     if (!mimeData || !mimeData->hasUrls()) {
