@@ -5,6 +5,7 @@
 Loader 负责视频导入、预览播放、进度控制，以及 FFmpeg 依赖检查与提示。
 
 ### 主要职责
+
 1. 导入视频（文件对话框 / 拖拽）
 2. 使用 FFmpeg 子进程解码并渲染画面
 3. 播放控制（播放/暂停、快进/快退、跳转）
@@ -15,12 +16,14 @@ Loader 负责视频导入、预览播放、进度控制，以及 FFmpeg 依赖�
 ## 核心类
 
 ### 1) VideoLoader
+
 文件：`videoloader.h` / `videoloader.cpp`
 
 - 负责页面层交互：导入、拖拽、状态转发
 - 持有 `EmbeddedFfmpegPlayer` 实例并驱动播放
 
 ### 2) EmbeddedFfmpegPlayer
+
 文件：`embeddedffmpegplayer.h` / `embeddedffmpegplayer.cpp`
 
 - 负责播放器 UI、键盘/鼠标控制
