@@ -10,6 +10,7 @@ Loader 负责视频导入、预览播放、进度控制，以及 FFmpeg 依赖�
 2. 使用 FFmpeg 子进程解码并渲染画面
 3. 播放控制（播放/暂停、快进/快退、跳转）
 4. 进度与时间显示（拖动/点击进度条）
+5. 音频播放与音量调节（0-100）
 
 ---
 
@@ -27,7 +28,7 @@ Loader 负责视频导入、预览播放、进度控制，以及 FFmpeg 依赖�
 文件：`embeddedffmpegplayer.h` / `embeddedffmpegplayer.cpp`
 
 - 负责播放器 UI、键盘/鼠标控制
-- 负责 FFmpeg/FFprobe 路径解析、子进程管理、帧解析渲染
+- 负责 FFmpeg/FFprobe 路径解析、子进程管理、音视频解码与渲染
 
 ---
 
@@ -84,6 +85,22 @@ QProcess::readyReadStandardOutput
 ```
 
 说明：`bytesPerLine` 明确使用 `m_outputWidth * 3`，修复了画面斜切/分块问题。
+
+### E. 音频解码与音量控制
+
+```text
+startPlaybackAt(positionMs)
+  -> startAudioPlaybackAt(positionMs)
+       -> FFmpeg 输出 s16le PCM 到 stdout
+       -> onAudioOutputReady() -> flushAudioBuffer()
+       -> QAudioOutput 播放
+
+QSlider(valueChanged)
+  -> onVolumeChanged(0~100)
+  -> QAudioOutput::setVolume
+```
+
+说明：音频与视频在同一 seek 位置启动，暂停/跳转时会同步重启音频流。
 
 ---
 

@@ -6,6 +6,9 @@
 #include <QProcess>
 
 class QByteArray;
+class QAudioFormat;
+class QAudioOutput;
+class QIODevice;
 
 class QLabel;
 class QPushButton;
@@ -87,6 +90,18 @@ private slots:
     /// @brief FFmpeg标准错误输出就绪的回调
     void onDecoderErrorReady();
 
+    /// @brief 音频解码标准输出就绪回调（接收PCM数据）
+    void onAudioOutputReady();
+
+    /// @brief 音频解码标准错误输出就绪回调
+    void onAudioErrorReady();
+
+    /// @brief 音量滑块变化回调（0-100）
+    void onVolumeChanged(int value);
+
+    /// @brief 音频解码进程结束回调
+    void onAudioProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+
 private:
     /// @brief 从当前位置确定性启动播放
     /// @return 启动成功返回true，否则false
@@ -94,8 +109,20 @@ private:
     /// @brief 创建FFmpeg解码进程
     void setupDecoderProcess();
 
+    /// @brief 创建FFmpeg音频解码进程
+    void setupAudioProcess();
+
     /// @brief 销毁FFmpeg解码进程
     void destroyDecoderProcess();
+
+    /// @brief 销毁FFmpeg音频解码进程
+    void destroyAudioProcess();
+
+    /// @brief 从指定位置启动音频播放
+    bool startAudioPlaybackAt(qint64 positionMs);
+
+    /// @brief 将缓存的PCM数据写入音频输出设备
+    void flushAudioBuffer();
 
     /// @brief 查找系统中的ffmpeg.exe可执行文件
     /// @return FFmpeg可执行文件路径，未找到返回空字符串
@@ -150,13 +177,20 @@ private:
     QPushButton *m_rewindButton = nullptr;      ///< 快退按钮
     QPushButton *m_playPauseButton = nullptr;   ///< 播放/暂停按钮
     QPushButton *m_forwardButton = nullptr;     ///< 快进按钮
+    QLabel *m_volumeIcon = nullptr;             ///< 音量图标
+    QSlider *m_volumeSlider = nullptr;          ///< 音量调节滑块
     QSlider *m_progressSlider = nullptr;        ///< 进度条滑块
     QLabel *m_timeLabel = nullptr;              ///< 时间标签
 
     // 解码和播放相关
     QProcess *m_ffmpegProcess = nullptr;        ///< FFmpeg解码进程
+    QProcess *m_audioProcess = nullptr;         ///< FFmpeg音频解码进程
     QTimer *m_progressTimer = nullptr;          ///< 进度刷新定时器
     QElapsedTimer m_playbackClock;              ///< 播放计时器
+    QAudioOutput *m_audioOutput = nullptr;      ///< Qt音频输出
+    QIODevice *m_audioSinkDevice = nullptr;     ///< 音频输出设备
+    QByteArray m_audioBuffer;                   ///< 音频PCM缓冲区
+    int m_volumePercent = 80;                   ///< 当前音量百分比
 
     // 视频信息
     QString m_currentFilePath;                  ///< 当前加载的视频文件路径

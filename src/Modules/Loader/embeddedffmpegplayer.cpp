@@ -1,6 +1,8 @@
 #include "embeddedffmpegplayer.h"
 
 #include <QByteArray>
+#include <QAudioFormat>
+#include <QAudioOutput>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
@@ -58,15 +60,23 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     m_rewindButton = new QPushButton(QStringLiteral("⏪"), this);
     m_playPauseButton = new QPushButton(QStringLiteral("▶"), this);
     m_forwardButton = new QPushButton(QStringLiteral("⏩"), this);
+    m_volumeIcon = new QLabel(QStringLiteral("🔊"), this);
+    m_volumeSlider = new QSlider(Qt::Horizontal, this);
     m_progressSlider = new QSlider(Qt::Horizontal, this);
     m_timeLabel = new QLabel(tr("00:00 / 00:00"), this);
 
     m_progressSlider->setRange(0, kSliderMax);
     m_progressSlider->setEnabled(false);
+    m_volumeSlider->setRange(0, 100);
+    m_volumeSlider->setValue(m_volumePercent);
+    m_volumeSlider->setFixedWidth(120);
+    m_volumeSlider->setToolTip(tr("音量"));
 
     m_playPauseButton->setMinimumSize(56, 42);
     m_rewindButton->setMinimumSize(44, 34);
     m_forwardButton->setMinimumSize(44, 34);
+    m_volumeIcon->setMinimumWidth(20);
+    m_volumeIcon->setAlignment(Qt::AlignCenter);
 
     const QString barStyle = QStringLiteral(
         "QPushButton { border: 1px solid #95a7bb; border-radius: 16px; background: #dce6f2; }"
@@ -79,6 +89,7 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     m_playPauseButton->setStyleSheet(barStyle);
     m_forwardButton->setStyleSheet(barStyle);
     m_progressSlider->setStyleSheet(barStyle);
+    m_volumeSlider->setStyleSheet(barStyle);
 
     progressLayout->addWidget(m_progressSlider, 1);
     progressLayout->addWidget(m_timeLabel);
@@ -87,6 +98,9 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     controlsLayout->addWidget(m_rewindButton);
     controlsLayout->addWidget(m_playPauseButton);
     controlsLayout->addWidget(m_forwardButton);
+    controlsLayout->addSpacing(8);
+    controlsLayout->addWidget(m_volumeIcon);
+    controlsLayout->addWidget(m_volumeSlider);
     controlsLayout->addStretch();
 
     mainLayout->addLayout(progressLayout);
@@ -95,13 +109,27 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     m_progressTimer = new QTimer(this);
     m_progressTimer->setInterval(150);
 
+    QAudioFormat audioFormat;
+    audioFormat.setSampleRate(48000);
+    audioFormat.setChannelCount(2);
+    audioFormat.setSampleSize(16);
+    audioFormat.setCodec(QStringLiteral("audio/pcm"));
+    audioFormat.setByteOrder(QAudioFormat::LittleEndian);
+    audioFormat.setSampleType(QAudioFormat::SignedInt);
+    m_audioOutput = new QAudioOutput(audioFormat, this);
+    m_audioOutput->setNotifyInterval(30);
+    m_audioOutput->setVolume(static_cast<qreal>(m_volumePercent) / 100.0);
+
     setupDecoderProcess();
+    setupAudioProcess();
 
     connect(m_playPauseButton, &QPushButton::clicked, this, &EmbeddedFfmpegPlayer::playPause);
     connect(m_rewindButton, &QPushButton::clicked, this, &EmbeddedFfmpegPlayer::seekBackward);
     connect(m_forwardButton, &QPushButton::clicked, this, &EmbeddedFfmpegPlayer::seekForward);
     connect(m_progressSlider, &QSlider::sliderPressed, this, &EmbeddedFfmpegPlayer::onSliderPressed);
     connect(m_progressSlider, &QSlider::sliderReleased, this, &EmbeddedFfmpegPlayer::onSliderReleased);
+    connect(m_volumeSlider, &QSlider::valueChanged, this, &EmbeddedFfmpegPlayer::onVolumeChanged);
+    connect(m_audioOutput, &QAudioOutput::notify, this, &EmbeddedFfmpegPlayer::flushAudioBuffer);
 
     connect(m_progressTimer, &QTimer::timeout, this, &EmbeddedFfmpegPlayer::onProgressTick);
 
@@ -112,6 +140,7 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
 EmbeddedFfmpegPlayer::~EmbeddedFfmpegPlayer()
 {
     stopPlayback();
+    destroyAudioProcess();
     destroyDecoderProcess();
 }
 
@@ -137,7 +166,9 @@ bool EmbeddedFfmpegPlayer::loadVideo(const QString &filePath)
     }
 
     stopPlayback();
+    destroyAudioProcess();
     destroyDecoderProcess();
+    setupAudioProcess();
     setupDecoderProcess();
 
     m_currentFilePath = QFileInfo(filePath).absoluteFilePath();
@@ -147,6 +178,7 @@ bool EmbeddedFfmpegPlayer::loadVideo(const QString &filePath)
     m_isPlaying = false;
     m_playPauseButton->setText(QStringLiteral("▶"));
     clearFrameBuffer();
+    m_audioBuffer.clear();
     m_videoSurface->setPixmap(QPixmap());
 
     m_cachedFfmpegPath = resolveFfmpegPath();
@@ -208,6 +240,7 @@ void EmbeddedFfmpegPlayer::stopPlayback()
 {
     m_progressTimer->stop();
     m_frameBytes = 0;
+    m_audioSinkDevice = nullptr;
 
     if (m_ffmpegProcess && m_ffmpegProcess->state() != QProcess::NotRunning) {
         const bool previouslyBlocked = m_ffmpegProcess->blockSignals(true);
@@ -224,6 +257,25 @@ void EmbeddedFfmpegPlayer::stopPlayback()
         m_ffmpegProcess->readAllStandardOutput();
         m_ffmpegProcess->readAllStandardError();
     }
+
+    if (m_audioProcess && m_audioProcess->state() != QProcess::NotRunning) {
+        const bool previouslyBlocked = m_audioProcess->blockSignals(true);
+        m_audioProcess->terminate();
+        if (!m_audioProcess->waitForFinished(800)) {
+            m_audioProcess->kill();
+            m_audioProcess->waitForFinished(1500);
+        }
+        m_audioProcess->blockSignals(previouslyBlocked);
+    }
+    if (m_audioProcess && m_audioProcess->isOpen()) {
+        m_audioProcess->readAllStandardOutput();
+        m_audioProcess->readAllStandardError();
+    }
+
+    if (m_audioOutput) {
+        m_audioOutput->stop();
+    }
+    m_audioBuffer.clear();
     clearFrameBuffer();
 }
 
@@ -440,6 +492,82 @@ void EmbeddedFfmpegPlayer::onDecoderErrorReady()
     }
 }
 
+void EmbeddedFfmpegPlayer::onAudioOutputReady()
+{
+    if (!m_audioProcess) {
+        return;
+    }
+
+    QProcess *proc = qobject_cast<QProcess *>(sender());
+    if (proc != m_audioProcess) {
+        return;
+    }
+
+    if (proc->isOpen()) {
+        m_audioBuffer.append(proc->readAllStandardOutput());
+        flushAudioBuffer();
+    }
+}
+
+void EmbeddedFfmpegPlayer::onAudioErrorReady()
+{
+    if (!m_audioProcess) {
+        return;
+    }
+
+    QProcess *proc = qobject_cast<QProcess *>(sender());
+    if (proc != m_audioProcess) {
+        return;
+    }
+
+    if (proc->isOpen()) {
+        proc->readAllStandardError();
+    }
+}
+
+void EmbeddedFfmpegPlayer::onVolumeChanged(int value)
+{
+    m_volumePercent = qBound(0, value, 100);
+
+    if (m_audioOutput) {
+        m_audioOutput->setVolume(static_cast<qreal>(m_volumePercent) / 100.0);
+    }
+
+    if (!m_volumeIcon) {
+        return;
+    }
+
+    if (m_volumePercent == 0) {
+        m_volumeIcon->setText(QStringLiteral("🔇"));
+    } else if (m_volumePercent <= 35) {
+        m_volumeIcon->setText(QStringLiteral("🔈"));
+    } else if (m_volumePercent <= 70) {
+        m_volumeIcon->setText(QStringLiteral("🔉"));
+    } else {
+        m_volumeIcon->setText(QStringLiteral("🔊"));
+    }
+}
+
+void EmbeddedFfmpegPlayer::onAudioProcessFinished(int, QProcess::ExitStatus)
+{
+    flushAudioBuffer();
+}
+
+void EmbeddedFfmpegPlayer::flushAudioBuffer()
+{
+    if (!m_audioSinkDevice || m_audioBuffer.isEmpty()) {
+        return;
+    }
+
+    while (!m_audioBuffer.isEmpty()) {
+        const qint64 written = m_audioSinkDevice->write(m_audioBuffer.constData(), m_audioBuffer.size());
+        if (written <= 0) {
+            break;
+        }
+        m_audioBuffer.remove(0, static_cast<int>(written));
+    }
+}
+
 QString EmbeddedFfmpegPlayer::resolveFfmpegPath() const
 {
     if (!m_cachedFfmpegPath.isEmpty() && QFileInfo::exists(m_cachedFfmpegPath)) {
@@ -536,8 +664,51 @@ bool EmbeddedFfmpegPlayer::startPlaybackAt(qint64 positionMs)
 
     m_positionMs = safePositionMs;
     m_startPositionMs = m_positionMs;
+    startAudioPlaybackAt(safePositionMs);
     updateProgressUi();
     return true;
+}
+
+bool EmbeddedFfmpegPlayer::startAudioPlaybackAt(qint64 positionMs)
+{
+    if (!m_audioProcess || !m_audioOutput || m_currentFilePath.isEmpty()) {
+        return false;
+    }
+
+    const QString ffmpegPath = resolveFfmpegPath();
+    if (ffmpegPath.isEmpty()) {
+        return false;
+    }
+
+    if (m_audioProcess->state() != QProcess::NotRunning) {
+        m_audioProcess->terminate();
+        if (!m_audioProcess->waitForFinished(500)) {
+            m_audioProcess->kill();
+            m_audioProcess->waitForFinished(1000);
+        }
+    }
+
+    m_audioOutput->stop();
+    m_audioSinkDevice = m_audioOutput->start();
+    m_audioBuffer.clear();
+
+    const qint64 safePositionMs = qMax<qint64>(0, positionMs);
+    QStringList args;
+    args << "-hide_banner" << "-loglevel" << "error";
+    args << "-ss" << QString::number(static_cast<double>(safePositionMs) / 1000.0, 'f', 3);
+    args << "-i" << m_currentFilePath;
+    args << "-vn" << "-sn";
+    args << "-ac" << "2" << "-ar" << "48000";
+    args << "-f" << "s16le" << "-";
+
+    m_audioProcess->setProgram(ffmpegPath);
+    m_audioProcess->setArguments(args);
+    m_audioProcess->setWorkingDirectory(QFileInfo(ffmpegPath).absolutePath());
+    m_audioProcess->setProcessChannelMode(QProcess::SeparateChannels);
+    m_audioProcess->blockSignals(false);
+    m_audioProcess->start();
+
+    return m_audioProcess->waitForStarted(3000);
 }
 
 void EmbeddedFfmpegPlayer::seekTo(qint64 positionMs)
@@ -737,6 +908,21 @@ void EmbeddedFfmpegPlayer::setupDecoderProcess()
             this, &EmbeddedFfmpegPlayer::onDecoderErrorReady);
 }
 
+void EmbeddedFfmpegPlayer::setupAudioProcess()
+{
+    if (m_audioProcess) {
+        return;
+    }
+
+    m_audioProcess = new QProcess(this);
+    connect(m_audioProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &EmbeddedFfmpegPlayer::onAudioProcessFinished);
+    connect(m_audioProcess, &QProcess::readyReadStandardOutput,
+            this, &EmbeddedFfmpegPlayer::onAudioOutputReady);
+    connect(m_audioProcess, &QProcess::readyReadStandardError,
+            this, &EmbeddedFfmpegPlayer::onAudioErrorReady);
+}
+
 void EmbeddedFfmpegPlayer::destroyDecoderProcess()
 {
     if (!m_ffmpegProcess) {
@@ -754,4 +940,23 @@ void EmbeddedFfmpegPlayer::destroyDecoderProcess()
     disconnect(m_ffmpegProcess, nullptr, this, nullptr);
     delete m_ffmpegProcess;
     m_ffmpegProcess = nullptr;
+}
+
+void EmbeddedFfmpegPlayer::destroyAudioProcess()
+{
+    if (!m_audioProcess) {
+        return;
+    }
+
+    if (m_audioProcess->state() != QProcess::NotRunning) {
+        m_audioProcess->terminate();
+        if (!m_audioProcess->waitForFinished(500)) {
+            m_audioProcess->kill();
+            m_audioProcess->waitForFinished(1000);
+        }
+    }
+
+    disconnect(m_audioProcess, nullptr, this, nullptr);
+    delete m_audioProcess;
+    m_audioProcess = nullptr;
 }
