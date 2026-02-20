@@ -1,4 +1,4 @@
-QT       += core gui network
+QT       += core gui network multimedia multimediawidgets
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -18,6 +18,10 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     src/Core/dependencymanager.cpp \
+    src/Modules/Loader/mediacontroller.cpp \
+    src/Widgets/fileselector.cpp \
+    src/Widgets/logconsole.cpp \
+    src/Widgets/progressbox.cpp \
     src/main.cpp \
     src/mainwindow.cpp \
     src/Modules/OutputMgr/outputmanagement.cpp \
@@ -29,6 +33,10 @@ SOURCES += \
 
 HEADERS += \
     src/Core/dependencymanager.h \
+    src/Modules/Loader/mediacontroller.h \
+    src/Widgets/fileselector.h \
+    src/Widgets/logconsole.h \
+    src/Widgets/progressbox.h \
     src/mainwindow.h \
     src/Modules/OutputMgr/outputmanagement.h \
     src/Modules/Burner/subtitleburning.h \

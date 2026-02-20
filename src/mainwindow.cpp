@@ -120,6 +120,8 @@ MainWindow::MainWindow(QWidget *parent)
     bindNav(ui->navBurnButton, burnPage);
     bindNav(ui->navOutputButton, outputPage);
 
+    connect(loaderPage, &VideoLoader::statusMessage, this, &MainWindow::setStatusHint);
+
     connect(ui->navDownloadButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
     connect(ui->navWhisperButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
     connect(ui->navBurnButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
