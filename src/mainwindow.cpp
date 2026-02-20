@@ -93,6 +93,7 @@ MainWindow::MainWindow(QWidget *parent)
     OutputManagement *outputPage = new OutputManagement(this);
 
     m_loaderPage = loaderPage;
+    m_whisperPage = whisperPage;
 
     ui->mainStackedWidget->addWidget(downloadPage);
     ui->mainStackedWidget->addWidget(loaderPage);
@@ -118,6 +119,21 @@ MainWindow::MainWindow(QWidget *parent)
     bindNavigationButton(ui->navOutputButton, outputPage, tr("输出管理"));
 
     connect(loaderPage, &VideoLoader::statusMessage, this, &MainWindow::setStatusHint);
+    connect(loaderPage, &VideoLoader::requestNextStep, this, [this, whisperPage](const QString &videoPath) {
+        if (!whisperPage || !ui || !ui->mainStackedWidget) {
+            return;
+        }
+        
+        // 停止当前页面的所有任务（工作流切换，无需确认）
+        QWidget *currentPage = ui->mainStackedWidget->currentWidget();
+        if (currentPage) {
+            stopAllTasksOnPage(currentPage);
+        }
+        
+        whisperPage->loadVideoFile(videoPath);
+        ui->mainStackedWidget->setCurrentWidget(whisperPage);
+        syncNavigationSelection(whisperPage);
+    });
 
     connect(ui->navDownloadButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
     connect(ui->navWhisperButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);

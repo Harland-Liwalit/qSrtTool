@@ -10,6 +10,7 @@ class QTimer;
 class QToolButton;
 class QWidget;
 class VideoLoader;
+class SubtitleExtraction;
 #ifdef Q_OS_WIN
 #include <pdh.h>
 #endif
@@ -32,6 +33,7 @@ private:
     bool m_dependencyAutoTriggered = false;
     bool m_skipPromptForCurrentTask = false;
     VideoLoader *m_loaderPage = nullptr;
+    SubtitleExtraction *m_whisperPage = nullptr;
     QHash<QToolButton *, QWidget *> m_navToPage;
     QHash<QToolButton *, QString> m_navFeatureNames;
 

@@ -18,6 +18,10 @@ public:
     explicit SubtitleExtraction(QWidget *parent = nullptr);
     ~SubtitleExtraction();
 
+    /// @brief 加载视频文件到字幕提取界面
+    /// @param videoPath 视频文件的绝对路径
+    void loadVideoFile(const QString &videoPath);
+
 private:
     Ui::SubtitleExtraction *ui;
     QTimer *m_toolsSpinTimer = nullptr;

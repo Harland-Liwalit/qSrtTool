@@ -1,6 +1,7 @@
 #include "subtitleextraction.h"
 #include "ui_subtitleextraction.h"
 
+#include <QFileInfo>
 #include <QTimer>
 #include <QToolButton>
 #include <QTransform>
@@ -29,6 +30,21 @@ SubtitleExtraction::SubtitleExtraction(QWidget *parent) :
 SubtitleExtraction::~SubtitleExtraction()
 {
     delete ui;
+}
+
+/// @brief 加载视频文件到字幕提取界面
+/// @details 将视频路径设置到输入框中，供后续字幕提取使用
+void SubtitleExtraction::loadVideoFile(const QString &videoPath)
+{
+    if (!ui || !ui->inputLineEdit) {
+        return;
+    }
+
+    if (videoPath.isEmpty() || !QFileInfo::exists(videoPath)) {
+        return;
+    }
+
+    ui->inputLineEdit->setText(videoPath);
 }
 
 void SubtitleExtraction::setToolsLoading(bool loading)

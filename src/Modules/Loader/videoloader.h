@@ -44,6 +44,10 @@ signals:
     /// @param message 状态信息文本
     void statusMessage(const QString &message);
 
+    /// @brief 请求跳转到下一步（字幕提取）
+    /// @param videoPath 当前加载的视频文件路径
+    void requestNextStep(const QString &videoPath);
+
 protected:
     /// @brief 处理拖入事件
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -61,6 +65,10 @@ private slots:
     /// @brief 点击"导入视频"按钮的处理函数
     /// @details 打开文件对话框让用户选择视频文件
     void onImportVideoClicked();
+
+    /// @brief 点击"转到下一步"按钮的处理函数
+    /// @details 发送信号跳转到字幕提取页面
+    void onNextStepClicked();
 
 private:
     /// @brief 加载并播放视频文件

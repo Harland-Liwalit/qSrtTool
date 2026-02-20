@@ -42,6 +42,7 @@ VideoLoader::VideoLoader(QWidget *parent) :
     placeholderLayout->addWidget(m_player);
 
     connect(ui->importVideoButton, &QPushButton::clicked, this, &VideoLoader::onImportVideoClicked);
+    connect(ui->nextStepButton, &QPushButton::clicked, this, &VideoLoader::onNextStepClicked);
     connect(m_player, &EmbeddedFfmpegPlayer::playbackError, this, [this](const QString &reason) {
         QMessageBox::warning(this, tr("播放失败"), reason);
         emit statusMessage(tr("播放失败: %1").arg(reason));
@@ -197,15 +198,35 @@ void VideoLoader::loadVideo(const QString &filePath)
     // 1. 检查m_player是否有效
     // 2. 调用EmbeddedFfmpegPlayer::loadVideo()加载视频
     // 3. 加载成功后自动开始播放
+    // 4. 加载成功后启用"转到下一步"按钮
     if (!m_player) {
         return;
     }
 
     emit statusMessage(tr("已选择视频，准备加载..."));
     if (!m_player->loadVideo(filePath)) {
+        ui->nextStepButton->setEnabled(false);
         return;
     }
     m_player->playPause();
+    ui->nextStepButton->setEnabled(true);
+}
+
+/// @brief 点击"转到下一步"按钮后触发
+/// @details 获取当前加载的视频路径并发送信号请求跳转到字幕提取页面
+void VideoLoader::onNextStepClicked()
+{
+    if (!m_player) {
+        return;
+    }
+
+    const QString videoPath = m_player->currentFilePath();
+    if (videoPath.isEmpty()) {
+        QMessageBox::warning(this, tr("提示"), tr("请先导入视频文件"));
+        return;
+    }
+
+    emit requestNextStep(videoPath);
 }
 
 /// @brief 从拖放的MIME数据中提取本地文件路径
