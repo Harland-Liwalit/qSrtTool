@@ -1,5 +1,7 @@
 #include "subtitleextraction.h"
 #include "ui_subtitleextraction.h"
+#include "whispersegmentmerger.h"
+#include "whispercommandbuilder.h"
 
 #include <QDesktopServices>
 #include <QDateTime>
@@ -22,8 +24,61 @@
 #include <QUrl>
 #include <QtMath>
 #include <QElapsedTimer>
+#include <QThread>
+#include <QMutex>
+#include <QWaitCondition>
+#include <QThreadPool>
+#include <QRunnable>
 
 #include "../../Core/dependencymanager.h"
+
+// 内部转录 Worker 类（用于线程池）
+class TranscribeWorker : public QRunnable
+{
+public:
+    struct SegmentInfo {
+        int index;
+        double startSeconds;
+        double duration;
+        QString audioPath;
+        QString outputBase;
+        QString srtPath;
+        QString rangeLabel;
+    };
+
+    TranscribeWorker(SubtitleExtraction *parent, const SegmentInfo &seg, const QString &whisperPath,
+                                     const QString &modelPath, const QString &languageCode, bool useGpu, int whisperThreadCount, int totalSegments,
+                     QMutex *resultLock, QVector<bool> *results)
+        : m_parent(parent), m_seg(seg), m_whisperPath(whisperPath), m_modelPath(modelPath),
+                        m_languageCode(languageCode), m_useGpu(useGpu), m_whisperThreadCount(whisperThreadCount), m_totalSegments(totalSegments),
+          m_resultLock(resultLock), m_results(results)
+    {
+    }
+
+    void run() override
+    {
+        if (!m_parent) return;
+        const bool result = m_parent->transcribeSegment(m_whisperPath, m_modelPath, m_seg.audioPath,
+                                                       m_seg.outputBase, m_languageCode, m_useGpu, m_whisperThreadCount, m_seg.index,
+                                                       m_totalSegments, m_seg.duration);
+        {
+            QMutexLocker lock(m_resultLock);
+            (*m_results)[m_seg.index] = result;
+        }
+    }
+
+private:
+    SubtitleExtraction *m_parent;
+    SegmentInfo m_seg;
+    QString m_whisperPath;
+    QString m_modelPath;
+    QString m_languageCode;
+    bool m_useGpu = false;
+    int m_whisperThreadCount = 1;
+    int m_totalSegments;
+    QMutex *m_resultLock;
+    QVector<bool> *m_results;
+};
 
 SubtitleExtraction::SubtitleExtraction(QWidget *parent) :
     QWidget(parent),
@@ -115,7 +170,8 @@ void SubtitleExtraction::setupWorkflowUi()
             this,
             tr("选择音视频文件"),
             ui->inputLineEdit->text(),
-            tr("媒体文件 (*.mp4 *.mkv *.avi *.mov *.mp3 *.wav *.flac);;所有文件 (*.*)"));
+            tr("媒体文件 (*.mp4 *.mkv *.avi *.mov *.mp3 *.wav *.flac);;所有文件 (*.*)")
+        );
         if (!filePath.isEmpty()) {
             ui->inputLineEdit->setText(filePath);
         }
@@ -347,9 +403,11 @@ void SubtitleExtraction::startTranscriptionWorkflow()
 
     const QFileInfo inputInfo(inputPath);
     const QString outputFormatText = ui->outputFormatComboBox ? ui->outputFormatComboBox->currentText() : QStringLiteral("SRT");
-    const QString outputExtension = outputFileExtensionFromUiText(outputFormatText);
+    const QString outputExtension = WhisperCommandBuilder::outputFileExtensionFromUiText(outputFormatText);
     const QString outputFilePath = QDir(finalRoot).filePath(inputInfo.completeBaseName() + "_whisper." + outputExtension);
 
+    m_workflowLogHistory.clear();
+    m_activeSegmentLogLines.clear();
     if (ui->logTextEdit) {
         ui->logTextEdit->clear();
     }
@@ -367,13 +425,27 @@ void SubtitleExtraction::startTranscriptionWorkflow()
     }
 
     QStringList segmentSrtFiles;
-    const int segmentSeconds = 20 * 60;
+    const int segmentSeconds = 5 * 60;
     const int segmentCount = allSuccess ? qCeil(durationSeconds / static_cast<double>(segmentSeconds)) : 0;
     if (allSuccess) {
-        appendWorkflowLog(tr("分段策略：每 20 分钟一段，共 %1 段").arg(segmentCount));
+        appendWorkflowLog(tr("分段策略：每 5 分钟一段，共 %1 段").arg(segmentCount));
     }
 
-    const QString languageCode = languageCodeFromUiText(ui->languageComboBox ? ui->languageComboBox->currentText() : QString());
+    // 初始化分段进度跟踪
+    {
+        QMutexLocker lock(&m_progressLock);
+        m_segmentProgress.clear();
+        for (int i = 0; i < segmentCount; ++i) {
+            m_segmentProgress[i] = -1;
+        }
+    }
+
+    const QString languageCode = WhisperCommandBuilder::languageCodeFromUiText(ui->languageComboBox ? ui->languageComboBox->currentText() : QString());
+    
+    // 第一阶段：提取所有分段音频
+    typedef TranscribeWorker::SegmentInfo SegmentInfo;
+    QVector<SegmentInfo> segments;
+
     for (int index = 0; allSuccess && index < segmentCount; ++index) {
         if (m_cancelRequested) {
             allSuccess = false;
@@ -387,95 +459,116 @@ void SubtitleExtraction::startTranscriptionWorkflow()
         const QString segmentAudioPath = QDir(jobDirPath).filePath(segmentPrefix + ".wav");
         const QString segmentOutputBase = QDir(jobDirPath).filePath(segmentPrefix);
         const QString segmentSrtPath = segmentOutputBase + ".srt";
-
         const QString rangeText = segmentRangeLabel(startSeconds, currentDuration);
-        appendWorkflowLog(tr("第 %1/%2 段（%3）开始识别").arg(index + 1).arg(segmentCount).arg(rangeText));
+
+        appendWorkflowLog(tr("第 %1/%2 段（%3）开始提取音频").arg(index + 1).arg(segmentCount).arg(rangeText));
 
         if (!extractSegmentAudio(ffmpegPath, inputPath, startSeconds, currentDuration, segmentAudioPath)) {
             allSuccess = false;
-            if (m_cancelRequested) {
-                failureMessage = tr("任务已停止。");
-                appendWorkflowLog(tr("任务已停止"));
-            } else {
+            if (!m_cancelRequested) {
                 failureMessage = tr("音频分段失败，请检查输入文件或 FFmpeg 是否可用。");
                 appendWorkflowLog(tr("第 %1/%2 段分段失败（%3）").arg(index + 1).arg(segmentCount).arg(rangeText));
             }
             break;
         }
 
-        if (!transcribeSegment(whisperPath, modelPath, segmentAudioPath, segmentOutputBase, languageCode,
-                               index, segmentCount, currentDuration)) {
-            allSuccess = false;
+        segments.append({ index, startSeconds, currentDuration, segmentAudioPath, segmentOutputBase, segmentSrtPath, rangeText });
+    }
+
+    // 第二阶段：并行转录所有分段
+    if (allSuccess && !segments.isEmpty()) {
+        appendWorkflowLog(tr("开始并行识别 %1 个音频分段...").arg(segments.size()));
+        const bool useGpu = ui->gpuCheckBox && ui->gpuCheckBox->isChecked();
+        
+        QThreadPool *pool = QThreadPool::globalInstance();
+        const int cpuThreads = qMax(2, QThread::idealThreadCount());
+        const int maxWorkers = qMax(1, qMin(4, cpuThreads / 4));
+        const int reservedForUi = 2;
+        const int availableForWhisper = qMax(1, cpuThreads - reservedForUi);
+        const int whisperThreadCount = qMax(1, availableForWhisper / maxWorkers);
+        pool->setMaxThreadCount(maxWorkers);
+        appendWorkflowLog(tr("并行策略：%1 个 worker，每个 whisper %2 线程（CPU 总线程 %3）")
+                          .arg(maxWorkers)
+                          .arg(whisperThreadCount)
+                          .arg(cpuThreads));
+
+        QVector<bool> segmentResults(segments.size(), false);
+        QMutex resultLock;
+
+        for (int i = 0; i < segments.size(); ++i) {
             if (m_cancelRequested) {
+                allSuccess = false;
                 failureMessage = tr("任务已停止。");
-                appendWorkflowLog(tr("任务已停止"));
-            } else {
-                failureMessage = tr("Whisper 识别失败，请检查模型文件和 whisper 版本。");
-                appendWorkflowLog(tr("第 %1/%2 段识别失败（%3）").arg(index + 1).arg(segmentCount).arg(rangeText));
+                break;
             }
-            break;
+
+            const SegmentInfo seg = segments[i];
+            const QString whisperPathLocal = resolveWhisperPath();
+            const QString modelPathLocal = selectedModelPath();
+
+            TranscribeWorker *worker = new TranscribeWorker(this, seg, whisperPathLocal, modelPathLocal,
+                                                            languageCode, useGpu, whisperThreadCount, segments.size(), &resultLock, &segmentResults);
+            pool->start(worker);
         }
 
-        if (!QFileInfo::exists(segmentSrtPath)) {
-            allSuccess = false;
-            failureMessage = tr("Whisper 未产出分段 SRT 文件。");
-            appendWorkflowLog(tr("第 %1/%2 段未产出字幕文件（%3）").arg(index + 1).arg(segmentCount).arg(rangeText));
-            break;
+        while (pool->activeThreadCount() > 0) {
+            if (m_cancelRequested) {
+                pool->clear();
+            }
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            QThread::msleep(15);
         }
 
-        segmentSrtFiles << segmentSrtPath;
-        appendWorkflowLog(tr("第 %1/%2 段识别完成（%3）").arg(index + 1).arg(segmentCount).arg(rangeText));
-        QCoreApplication::processEvents();
+        for (int i = 0; i < segments.size(); ++i) {
+            if (m_cancelRequested) {
+                allSuccess = false;
+                failureMessage = tr("任务已停止。");
+                break;
+            }
+
+            if (!segmentResults[i]) {
+                allSuccess = false;
+                if (!m_cancelRequested) {
+                    failureMessage = tr("Whisper 识别失败，请检查模型文件和 whisper 版本。");
+                    appendWorkflowLog(tr("第 %1 段识别失败").arg(segments[i].index + 1));
+                }
+                break;
+            }
+
+            if (!QFileInfo::exists(segments[i].srtPath)) {
+                allSuccess = false;
+                failureMessage = tr("Whisper 未产出分段 SRT 文件。");
+                appendWorkflowLog(tr("第 %1 段未产出字幕文件").arg(segments[i].index + 1));
+                break;
+            }
+
+            segmentSrtFiles << segments[i].srtPath;
+            appendWorkflowLog(tr("第 %1/%2 段识别完成（%3）").arg(segments[i].index + 1).arg(segments.size()).arg(segments[i].rangeLabel));
+            QCoreApplication::processEvents();
+        }
     }
 
     if (allSuccess) {
         appendWorkflowLog(tr("开始合并片段字幕..."));
-        QString mergedSrtContent;
-        QTextStream mergedSrtOut(&mergedSrtContent, QIODevice::WriteOnly);
-        int globalIndex = 1;
-
-        for (int index = 0; allSuccess && index < segmentSrtFiles.size(); ++index) {
-            QFile srtFile(segmentSrtFiles[index]);
-            if (!srtFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                allSuccess = false;
-                failureMessage = tr("读取分段 SRT 失败。\n%1").arg(segmentSrtFiles[index]);
-                appendWorkflowLog(tr("合并失败：读取第 %1 段字幕失败").arg(index + 1));
-                break;
-            }
-
-            QTextStream in(&srtFile);
-            in.setCodec("UTF-8");
-            const QString shifted = shiftedSrtContent(in.readAll(), static_cast<qint64>(index) * segmentSeconds * 1000);
-            srtFile.close();
-
-            const QStringList blocks = shifted.split(QRegularExpression("\\r?\\n\\r?\\n"), Qt::SkipEmptyParts);
-            for (const QString &block : blocks) {
-                const QStringList lines = block.split(QRegularExpression("\\r?\\n"), Qt::KeepEmptyParts);
-                if (lines.size() < 2) {
-                    continue;
-                }
-
-                mergedSrtOut << globalIndex++ << "\n";
-                for (int i = 1; i < lines.size(); ++i) {
-                    mergedSrtOut << lines[i] << "\n";
-                }
-                mergedSrtOut << "\n";
-            }
-
-            const int mergeProgress = qRound((static_cast<double>(index + 1) / qMax(1, segmentSrtFiles.size())) * 100.0);
-            appendWorkflowLog(tr("合并进度：%1%").arg(mergeProgress));
+        
+        // 映射输出格式
+        WhisperSegmentMerger::OutputFormat mergerFormat = WhisperSegmentMerger::Format_SRT;
+        if (outputFormatText == QStringLiteral("TXT")) {
+            mergerFormat = WhisperSegmentMerger::Format_TXT;
+        } else if (outputFormatText == QStringLiteral("TXT（带时间）")) {
+            mergerFormat = WhisperSegmentMerger::Format_TXT_Timestamped;
+        } else if (outputFormatText == QStringLiteral("WebVTT")) {
+            mergerFormat = WhisperSegmentMerger::Format_WebVTT;
         }
-
-        if (allSuccess) {
-            QString finalOutputContent = mergedSrtContent;
-            if (outputFormatText == QStringLiteral("TXT")) {
-                finalOutputContent = srtToPlainText(mergedSrtContent);
-            } else if (outputFormatText == QStringLiteral("TXT（带时间）")) {
-                finalOutputContent = srtToTimestampedText(mergedSrtContent);
-            } else if (outputFormatText == QStringLiteral("WebVTT")) {
-                finalOutputContent = srtToWebVtt(mergedSrtContent);
-            }
-
+        
+        const QString finalOutputContent = WhisperSegmentMerger::mergeSegmentSrtFiles(
+            segmentSrtFiles, static_cast<double>(segmentSeconds), mergerFormat);
+        
+        if (finalOutputContent.isEmpty()) {
+            allSuccess = false;
+            failureMessage = tr("合并字幕失败。");
+            appendWorkflowLog(tr("合并失败：无法生成合并内容"));
+        } else {
             QFile outputFile(outputFilePath);
             if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 allSuccess = false;
@@ -486,6 +579,7 @@ void SubtitleExtraction::startTranscriptionWorkflow()
                 out.setCodec("UTF-8");
                 out << finalOutputContent;
                 outputFile.close();
+                appendWorkflowLog(tr("合并进度：100%"));
             }
         }
     }
@@ -495,6 +589,9 @@ void SubtitleExtraction::startTranscriptionWorkflow()
         QDir(jobDirPath).removeRecursively();
         appendWorkflowLog(tr("已清理中间文件"));
     }
+
+    m_activeSegmentLogLines.clear();
+    renderWorkflowLogConsole();
 
     updateRunningStateUi(false);
 
@@ -513,11 +610,17 @@ void SubtitleExtraction::requestStopWorkflow()
     // 仅设置停止标记；若外部进程正在运行则尝试终止。
     m_cancelRequested = true;
     appendWorkflowLog(tr("正在停止任务，请稍候..."));
-    if (m_activeProcess && m_activeProcess->state() != QProcess::NotRunning) {
-        m_activeProcess->terminate();
-        if (!m_activeProcess->waitForFinished(800)) {
-            m_activeProcess->kill();
-            m_activeProcess->waitForFinished(1000);
+    QProcess *activeProcess = nullptr;
+    {
+        QMutexLocker locker(&m_processLock);
+        activeProcess = m_activeProcess;
+    }
+
+    if (activeProcess && activeProcess->state() != QProcess::NotRunning) {
+        activeProcess->terminate();
+        if (!activeProcess->waitForFinished(800)) {
+            activeProcess->kill();
+            activeProcess->waitForFinished(1000);
         }
     }
 }
@@ -525,7 +628,11 @@ void SubtitleExtraction::requestStopWorkflow()
 bool SubtitleExtraction::runProcessCancelable(const QString &program, const QStringList &arguments, QString *stdErrOutput)
 {
     QProcess process;
-    m_activeProcess = &process;
+    QString stdErrTail;
+    {
+        QMutexLocker locker(&m_processLock);
+        m_activeProcess = &process;
+    }
     process.setProgram(program);
     process.setArguments(arguments);
     process.setProcessChannelMode(QProcess::SeparateChannels);
@@ -535,7 +642,12 @@ bool SubtitleExtraction::runProcessCancelable(const QString &program, const QStr
         if (stdErrOutput) {
             *stdErrOutput = process.errorString();
         }
-        m_activeProcess = nullptr;
+        {
+            QMutexLocker locker(&m_processLock);
+            if (m_activeProcess == &process) {
+                m_activeProcess = nullptr;
+            }
+        }
         return false;
     }
 
@@ -546,19 +658,44 @@ bool SubtitleExtraction::runProcessCancelable(const QString &program, const QStr
                 process.kill();
                 process.waitForFinished(1200);
             }
-            m_activeProcess = nullptr;
+            {
+                QMutexLocker locker(&m_processLock);
+                if (m_activeProcess == &process) {
+                    m_activeProcess = nullptr;
+                }
+            }
             return false;
         }
 
         process.waitForFinished(120);
+        if (process.bytesAvailable() > 0 || process.bytesToWrite() >= 0) {
+            const QString outChunk = QString::fromLocal8Bit(process.readAllStandardOutput());
+            Q_UNUSED(outChunk);
+            const QString errChunk = QString::fromLocal8Bit(process.readAllStandardError());
+            if (!errChunk.isEmpty()) {
+                stdErrTail += errChunk;
+                if (stdErrTail.size() > 32768) {
+                    stdErrTail = stdErrTail.right(32768);
+                }
+            }
+        }
         QCoreApplication::processEvents();
     }
 
     if (stdErrOutput) {
-        *stdErrOutput = QString::fromLocal8Bit(process.readAllStandardError());
+        stdErrTail += QString::fromLocal8Bit(process.readAllStandardError());
+        if (stdErrTail.size() > 32768) {
+            stdErrTail = stdErrTail.right(32768);
+        }
+        *stdErrOutput = stdErrTail;
     }
 
-    m_activeProcess = nullptr;
+    {
+        QMutexLocker locker(&m_processLock);
+        if (m_activeProcess == &process) {
+            m_activeProcess = nullptr;
+        }
+    }
     return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
 }
 
@@ -597,19 +734,8 @@ bool SubtitleExtraction::extractSegmentAudio(const QString &ffmpegPath,
                                              const QString &segmentAudioPath)
 {
     QString stdErr;
-    const QStringList args = {
-        "-y",
-        "-hide_banner",
-        "-loglevel", "error",
-        "-ss", QString::number(startSeconds, 'f', 3),
-        "-t", QString::number(durationSeconds, 'f', 3),
-        "-i", inputPath,
-        "-vn",
-        "-ac", "1",
-        "-ar", "16000",
-        "-c:a", "pcm_s16le",
-        segmentAudioPath
-    };
+    const QStringList args = WhisperCommandBuilder::buildFfmpegExtractArgs(
+        inputPath, startSeconds, durationSeconds, segmentAudioPath);
 
     const bool ok = runProcessCancelable(ffmpegPath, args, &stdErr);
     if (!ok && !stdErr.trimmed().isEmpty()) {
@@ -623,26 +749,23 @@ bool SubtitleExtraction::transcribeSegment(const QString &whisperPath,
                                            const QString &segmentAudioPath,
                                            const QString &segmentOutputBasePath,
                                            const QString &languageCode,
+                                           bool useGpu,
+                                           int whisperThreadCount,
                                            int segmentIndex,
                                            int segmentCount,
                                            double segmentDurationSeconds)
 {
-    QStringList args;
-    args << "-m" << modelPath
-         << "-f" << segmentAudioPath
-         << "-osrt"
-         << "-of" << segmentOutputBasePath;
-
-    if (!languageCode.isEmpty()) {
-        args << "-l" << languageCode;
-    }
-    if (ui->gpuCheckBox && ui->gpuCheckBox->isChecked()) {
-        args << "-ng" << "99";
-    }
+    const QStringList args = WhisperCommandBuilder::buildWhisperTranscribeArgs(
+        modelPath, segmentAudioPath, segmentOutputBasePath, languageCode,
+        useGpu, whisperThreadCount);
 
     QString stdErr;
+    QString stdErrTail;
     QProcess process;
-    m_activeProcess = &process;
+    {
+        QMutexLocker locker(&m_processLock);
+        m_activeProcess = &process;
+    }
     process.setProgram(whisperPath);
     process.setArguments(args);
     process.setProcessChannelMode(QProcess::SeparateChannels);
@@ -650,13 +773,27 @@ bool SubtitleExtraction::transcribeSegment(const QString &whisperPath,
 
     if (!process.waitForStarted(5000)) {
         stdErr = process.errorString();
-        m_activeProcess = nullptr;
+        {
+            QMutexLocker locker(&m_processLock);
+            if (m_activeProcess == &process) {
+                m_activeProcess = nullptr;
+            }
+        }
         return false;
     }
 
     QElapsedTimer timer;
     timer.start();
     const double safeSegmentSeconds = qMax(1.0, segmentDurationSeconds);
+    int lastReportedSegmentProgress = -1;
+    qint64 lastTailRefreshMs = -1;
+    qint64 lastActivityMs = 0;
+
+    {
+        QMutexLocker lock(&m_progressLock);
+        m_segmentProgress[segmentIndex] = 0;
+    }
+    updateSegmentProgressLog(segmentIndex, 0, false);
 
     while (process.state() != QProcess::NotRunning) {
         if (m_cancelRequested) {
@@ -665,35 +802,114 @@ bool SubtitleExtraction::transcribeSegment(const QString &whisperPath,
                 process.kill();
                 process.waitForFinished(1200);
             }
-            m_activeProcess = nullptr;
+            {
+                QMutexLocker locker(&m_processLock);
+                if (m_activeProcess == &process) {
+                    m_activeProcess = nullptr;
+                }
+            }
             return false;
         }
 
         process.waitForFinished(200);
+        const QString outChunk = QString::fromLocal8Bit(process.readAllStandardOutput());
+        if (!outChunk.isEmpty()) {
+            lastActivityMs = timer.elapsed();
+        }
+        const QString errChunk = QString::fromLocal8Bit(process.readAllStandardError());
+        if (!errChunk.isEmpty()) {
+            stdErrTail += errChunk;
+            if (stdErrTail.size() > 32768) {
+                stdErrTail = stdErrTail.right(32768);
+            }
+            lastActivityMs = timer.elapsed();
+        }
+
         const double elapsedSeconds = timer.elapsed() / 1000.0;
         const double segmentRatio = qBound(0.0, elapsedSeconds / safeSegmentSeconds, 1.0);
-        const double overallRatio = (segmentIndex + segmentRatio) / qMax(1, segmentCount);
-        int progressPercent = qBound(0, qFloor(overallRatio * 100.0), 100);
-        if (segmentIndex == segmentCount - 1 && progressPercent >= 100) {
-            progressPercent = 99;
+        int segmentProgress = qBound(0, qFloor(segmentRatio * 100.0), 100);
+        if (segmentProgress >= 100) {
+            segmentProgress = 99;
         }
 
-        if (progressPercent != m_lastProgressPercent) {
-            m_lastProgressPercent = progressPercent;
-            emit progressChanged(progressPercent);
+        if (segmentProgress != lastReportedSegmentProgress) {
+            lastReportedSegmentProgress = segmentProgress;
+            lastActivityMs = timer.elapsed();
+            int overallPercent = 0;
+            QString parallelSummary;
+            {
+                QMutexLocker lock(&m_progressLock);
+                m_segmentProgress[segmentIndex] = segmentProgress;
+
+                int progressSum = 0;
+                for (int i = 0; i < segmentCount; ++i) {
+                    progressSum += qMax(0, m_segmentProgress.value(i, -1));
+                }
+                overallPercent = progressSum / qMax(1, segmentCount);
+                if (overallPercent != m_lastProgressPercent) {
+                    m_lastProgressPercent = overallPercent;
+                    emit progressChanged(overallPercent);
+                }
+
+                parallelSummary = buildParallelStatusSummaryLocked(segmentCount, overallPercent);
+            }
+            updateSegmentProgressLog(segmentIndex, segmentProgress, false);
+            emit statusMessage(parallelSummary);
         }
 
-        QCoreApplication::processEvents();
+        if (segmentProgress == 99) {
+            const qint64 elapsedMs = timer.elapsed();
+            if (lastTailRefreshMs < 0 || elapsedMs - lastTailRefreshMs >= 1000) {
+                lastTailRefreshMs = elapsedMs;
+                updateSegmentProgressLog(segmentIndex, 99, false);
+            }
+
+            const qint64 finishingTimeoutMs = 120000;
+            if (elapsedMs - lastActivityMs > finishingTimeoutMs) {
+                stdErrTail += tr("\nWhisper 收尾超时（超过 %1 秒无进度/无输出），已终止该分段进程。")
+                                  .arg(finishingTimeoutMs / 1000);
+                process.terminate();
+                if (!process.waitForFinished(1000)) {
+                    process.kill();
+                    process.waitForFinished(1200);
+                }
+                break;
+            }
+        }
+
     }
 
-    stdErr = QString::fromLocal8Bit(process.readAllStandardError());
-    if (segmentIndex == segmentCount - 1 && m_lastProgressPercent < 100) {
-        m_lastProgressPercent = 100;
-        emit progressChanged(100);
-        appendWorkflowLog(tr("识别进度：100%"));
+    stdErrTail += QString::fromLocal8Bit(process.readAllStandardError());
+    if (stdErrTail.size() > 32768) {
+        stdErrTail = stdErrTail.right(32768);
     }
+    stdErr = stdErrTail;
+    int finalOverallPercent = 100;
+    QString finalParallelSummary;
+    {
+        QMutexLocker lock(&m_progressLock);
+        m_segmentProgress[segmentIndex] = 100;
+
+        int progressSum = 0;
+        for (int i = 0; i < segmentCount; ++i) {
+            progressSum += qMax(0, m_segmentProgress.value(i, -1));
+        }
+        finalOverallPercent = progressSum / qMax(1, segmentCount);
+        finalParallelSummary = buildParallelStatusSummaryLocked(segmentCount, finalOverallPercent);
+        if (finalOverallPercent != m_lastProgressPercent) {
+            m_lastProgressPercent = finalOverallPercent;
+            emit progressChanged(finalOverallPercent);
+        }
+    }
+    updateSegmentProgressLog(segmentIndex, 100, true);
+    emit statusMessage(finalParallelSummary);
     const bool ok = process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
-    m_activeProcess = nullptr;
+    {
+        QMutexLocker locker(&m_processLock);
+        if (m_activeProcess == &process) {
+            m_activeProcess = nullptr;
+        }
+    }
     if (!ok && !stdErr.trimmed().isEmpty()) {
         appendWorkflowLog(tr("Whisper 错误：%1").arg(stdErr.trimmed()));
     }
@@ -702,170 +918,42 @@ bool SubtitleExtraction::transcribeSegment(const QString &whisperPath,
 
 bool SubtitleExtraction::parseSrtTimestamp(const QString &text, qint64 &milliseconds)
 {
-    const QRegularExpression re("^(\\d{2}):(\\d{2}):(\\d{2}),(\\d{3})$");
-    const QRegularExpressionMatch match = re.match(text.trimmed());
-    if (!match.hasMatch()) {
-        return false;
-    }
-
-    const qint64 h = match.captured(1).toLongLong();
-    const qint64 m = match.captured(2).toLongLong();
-    const qint64 s = match.captured(3).toLongLong();
-    const qint64 ms = match.captured(4).toLongLong();
-    milliseconds = (((h * 60) + m) * 60 + s) * 1000 + ms;
-    return true;
+    return WhisperSegmentMerger::parseSrtTimestamp(text, milliseconds);
 }
 
 QString SubtitleExtraction::formatSrtTimestamp(qint64 milliseconds)
 {
-    milliseconds = qMax<qint64>(0, milliseconds);
-    const qint64 totalSeconds = milliseconds / 1000;
-    const qint64 ms = milliseconds % 1000;
-    const qint64 seconds = totalSeconds % 60;
-    const qint64 minutes = (totalSeconds / 60) % 60;
-    const qint64 hours = totalSeconds / 3600;
-
-    return QString("%1:%2:%3,%4")
-        .arg(hours, 2, 10, QLatin1Char('0'))
-        .arg(minutes, 2, 10, QLatin1Char('0'))
-        .arg(seconds, 2, 10, QLatin1Char('0'))
-        .arg(ms, 3, 10, QLatin1Char('0'));
+    return WhisperSegmentMerger::formatSrtTimestamp(milliseconds);
 }
 
 QString SubtitleExtraction::shiftedSrtContent(const QString &srtContent, qint64 offsetMs)
 {
-    QStringList outputLines;
-    const QStringList lines = srtContent.split(QRegularExpression("\\r?\\n"), Qt::KeepEmptyParts);
-    const QRegularExpression timingRe("^(\\d{2}:\\d{2}:\\d{2},\\d{3})\\s*-->\\s*(\\d{2}:\\d{2}:\\d{2},\\d{3})(.*)$");
-
-    for (const QString &line : lines) {
-        const QRegularExpressionMatch match = timingRe.match(line);
-        if (!match.hasMatch()) {
-            outputLines << line;
-            continue;
-        }
-
-        qint64 startMs = 0;
-        qint64 endMs = 0;
-        if (!parseSrtTimestamp(match.captured(1), startMs) || !parseSrtTimestamp(match.captured(2), endMs)) {
-            outputLines << line;
-            continue;
-        }
-
-        const QString shiftedLine = QString("%1 --> %2%3")
-                                        .arg(formatSrtTimestamp(startMs + offsetMs))
-                                        .arg(formatSrtTimestamp(endMs + offsetMs))
-                                        .arg(match.captured(3));
-        outputLines << shiftedLine;
-    }
-
-    return outputLines.join("\n");
+    return WhisperSegmentMerger::shiftedSrtContent(srtContent, offsetMs);
 }
 
 QString SubtitleExtraction::languageCodeFromUiText(const QString &uiText)
 {
-    if (uiText == QStringLiteral("中文")) {
-        return "zh";
-    }
-    if (uiText == QStringLiteral("English")) {
-        return "en";
-    }
-    if (uiText == QStringLiteral("日本語")) {
-        return "ja";
-    }
-    if (uiText == QStringLiteral("한국어")) {
-        return "ko";
-    }
-    if (uiText == QStringLiteral("Español")) {
-        return "es";
-    }
-    if (uiText == QStringLiteral("Français")) {
-        return "fr";
-    }
-    if (uiText == QStringLiteral("Deutsch")) {
-        return "de";
-    }
-    if (uiText == QStringLiteral("Русский")) {
-        return "ru";
-    }
-
-    return QString();
+    return WhisperCommandBuilder::languageCodeFromUiText(uiText);
 }
 
 QString SubtitleExtraction::outputFileExtensionFromUiText(const QString &uiText)
 {
-    if (uiText == QStringLiteral("TXT") || uiText == QStringLiteral("TXT（带时间）")) {
-        return QStringLiteral("txt");
-    }
-    if (uiText == QStringLiteral("WebVTT") || uiText == QStringLiteral("WEDTT")) {
-        return QStringLiteral("vtt");
-    }
-    return QStringLiteral("srt");
+    return WhisperCommandBuilder::outputFileExtensionFromUiText(uiText);
 }
 
 QString SubtitleExtraction::srtToPlainText(const QString &srtContent)
 {
-    QStringList lines;
-    const QStringList blocks = srtContent.split(QRegularExpression("\\r?\\n\\r?\\n"), Qt::SkipEmptyParts);
-    for (const QString &block : blocks) {
-        const QStringList blockLines = block.split(QRegularExpression("\\r?\\n"), Qt::KeepEmptyParts);
-        for (int i = 2; i < blockLines.size(); ++i) {
-            if (!blockLines[i].trimmed().isEmpty()) {
-                lines << blockLines[i].trimmed();
-            }
-        }
-    }
-    return lines.join("\n");
+    return WhisperSegmentMerger::srtToPlainText(srtContent);
 }
 
 QString SubtitleExtraction::srtToTimestampedText(const QString &srtContent)
 {
-    QStringList lines;
-    const QStringList blocks = srtContent.split(QRegularExpression("\\r?\\n\\r?\\n"), Qt::SkipEmptyParts);
-    for (const QString &block : blocks) {
-        const QStringList blockLines = block.split(QRegularExpression("\\r?\\n"), Qt::KeepEmptyParts);
-        if (blockLines.size() < 2) {
-            continue;
-        }
-        const QString timeLine = blockLines[1].trimmed();
-        QString textLine;
-        for (int i = 2; i < blockLines.size(); ++i) {
-            if (!blockLines[i].trimmed().isEmpty()) {
-                if (!textLine.isEmpty()) {
-                    textLine += " ";
-                }
-                textLine += blockLines[i].trimmed();
-            }
-        }
-        if (!textLine.isEmpty()) {
-            lines << QString("[%1] %2").arg(timeLine, textLine);
-        }
-    }
-    return lines.join("\n");
+    return WhisperSegmentMerger::srtToTimestampedText(srtContent);
 }
 
 QString SubtitleExtraction::srtToWebVtt(const QString &srtContent)
 {
-    QStringList out;
-    out << "WEBVTT" << "";
-
-    const QStringList blocks = srtContent.split(QRegularExpression("\\r?\\n\\r?\\n"), Qt::SkipEmptyParts);
-    for (const QString &block : blocks) {
-        const QStringList blockLines = block.split(QRegularExpression("\\r?\\n"), Qt::KeepEmptyParts);
-        if (blockLines.size() < 2) {
-            continue;
-        }
-
-        QString timing = blockLines[1];
-        timing.replace(",", ".");
-        out << timing;
-        for (int i = 2; i < blockLines.size(); ++i) {
-            out << blockLines[i];
-        }
-        out << "";
-    }
-
-    return out.join("\n");
+    return WhisperSegmentMerger::srtToWebVtt(srtContent);
 }
 
 QString SubtitleExtraction::segmentRangeLabel(double startSeconds, double durationSeconds)
@@ -875,18 +963,83 @@ QString SubtitleExtraction::segmentRangeLabel(double startSeconds, double durati
     return QString("%1-%2 分钟").arg(startMin).arg(endMin);
 }
 
-void SubtitleExtraction::appendWorkflowLog(const QString &message)
+QString SubtitleExtraction::buildParallelStatusSummaryLocked(int segmentCount, int overallPercent) const
+{
+    QStringList activeSegments;
+    for (int i = 0; i < segmentCount; ++i) {
+        const int progress = m_segmentProgress.value(i, -1);
+        if (progress >= 0 && progress < 100) {
+            activeSegments << tr("第%1段 %2%").arg(i + 1).arg(progress);
+        }
+    }
+
+    if (activeSegments.isEmpty()) {
+        return tr("识别总进度：%1%").arg(overallPercent);
+    }
+
+    return tr("进行中：%1 ｜ 总进度：%2%")
+        .arg(activeSegments.join(" | "))
+        .arg(overallPercent);
+}
+
+void SubtitleExtraction::renderWorkflowLogConsole()
 {
     if (!ui || !ui->logTextEdit) {
         return;
     }
 
-    const QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
-    ui->logTextEdit->append(QString("[%1] %2").arg(timestamp, message));
-    emit statusMessage(message);
+    QStringList lines = m_workflowLogHistory;
+    for (auto it = m_activeSegmentLogLines.constBegin(); it != m_activeSegmentLogLines.constEnd(); ++it) {
+        lines << it.value();
+    }
+
+    ui->logTextEdit->setPlainText(lines.join("\n"));
     if (ui->logTextEdit->verticalScrollBar()) {
         ui->logTextEdit->verticalScrollBar()->setValue(ui->logTextEdit->verticalScrollBar()->maximum());
     }
+}
+
+void SubtitleExtraction::updateSegmentProgressLog(int segmentIndex, int progressPercent, bool finished)
+{
+    if (QThread::currentThread() != thread()) {
+        QMetaObject::invokeMethod(this, [this, segmentIndex, progressPercent, finished]() {
+            updateSegmentProgressLog(segmentIndex, progressPercent, finished);
+        }, Qt::QueuedConnection);
+        return;
+    }
+
+    const QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+    if (finished) {
+        m_activeSegmentLogLines.remove(segmentIndex);
+        m_workflowLogHistory << QString("[%1] %2")
+                                .arg(timestamp,
+                                     tr("第 %1 段识别完成：100%").arg(segmentIndex + 1));
+    } else {
+        m_activeSegmentLogLines[segmentIndex] = QString("[%1] %2")
+                                                    .arg(timestamp,
+                                                         tr("第 %1 段识别进度=%2%").arg(segmentIndex + 1).arg(progressPercent));
+    }
+
+    renderWorkflowLogConsole();
+}
+
+void SubtitleExtraction::appendWorkflowLog(const QString &message)
+{
+    if (QThread::currentThread() != thread()) {
+        QMetaObject::invokeMethod(this, [this, message]() {
+            appendWorkflowLog(message);
+        }, Qt::QueuedConnection);
+        return;
+    }
+
+    if (!ui || !ui->logTextEdit) {
+        return;
+    }
+
+    const QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+    m_workflowLogHistory << QString("[%1] %2").arg(timestamp, message);
+    renderWorkflowLogConsole();
+    emit statusMessage(message);
 }
 
 void SubtitleExtraction::initializeLogConsole()

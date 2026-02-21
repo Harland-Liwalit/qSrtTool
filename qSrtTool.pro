@@ -1,4 +1,4 @@
-QT       += core gui network multimedia
+QT       += core gui network multimedia concurrent
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -27,6 +27,8 @@ SOURCES += \
     src/Modules/OutputMgr/outputmanagement.cpp \
     src/Modules/Burner/subtitleburning.cpp \
     src/Modules/Whisper/subtitleextraction.cpp \
+    src/Modules/Whisper/whispersegmentmerger.cpp \
+    src/Modules/Whisper/whispercommandbuilder.cpp \
     src/Modules/Translator/subtitletranslation.cpp \
     src/Modules/Downloder/videodownloader.cpp \
     src/Modules/Loader/videoloader.cpp
@@ -41,6 +43,8 @@ HEADERS += \
     src/Modules/OutputMgr/outputmanagement.h \
     src/Modules/Burner/subtitleburning.h \
     src/Modules/Whisper/subtitleextraction.h \
+    src/Modules/Whisper/whispersegmentmerger.h \
+    src/Modules/Whisper/whispercommandbuilder.h \
     src/Modules/Translator/subtitletranslation.h \
     src/Modules/Downloder/videodownloader.h \
     src/Modules/Loader/videoloader.h

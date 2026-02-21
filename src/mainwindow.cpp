@@ -120,9 +120,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(loaderPage, &VideoLoader::statusMessage, this, &MainWindow::setStatusHint);
     connect(whisperPage, &SubtitleExtraction::statusMessage, this, &MainWindow::setStatusHint);
-    connect(whisperPage, &SubtitleExtraction::progressChanged, this, [this](int percent) {
-        setStatusHint(tr("识别进度：%1%").arg(percent));
-    });
     connect(loaderPage, &VideoLoader::requestNextStep, this, [this, whisperPage](const QString &videoPath) {
         if (!whisperPage || !ui || !ui->mainStackedWidget) {
             return;

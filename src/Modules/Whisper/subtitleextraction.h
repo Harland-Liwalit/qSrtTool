@@ -3,10 +3,15 @@
 
 #include <QWidget>
 #include <QIcon>
+#include <QMutex>
+#include <QMap>
 
 class QTimer;
 class QShowEvent;
 class QProcess;
+class TranscribeWorker;
+class WhisperSegmentMerger;
+class WhisperCommandBuilder;
 
 namespace Ui {
 class SubtitleExtraction;
@@ -15,6 +20,7 @@ class SubtitleExtraction;
 class SubtitleExtraction : public QWidget
 {
     Q_OBJECT
+    friend class TranscribeWorker;
 
 public:
     explicit SubtitleExtraction(QWidget *parent = nullptr);
@@ -38,6 +44,11 @@ private:
     bool m_cancelRequested = false;
     QProcess *m_activeProcess = nullptr;
     int m_lastProgressPercent = -1;
+    QMutex m_processLock;
+    QMutex m_progressLock;
+    QMap<int, int> m_segmentProgress;
+    QStringList m_workflowLogHistory;
+    QMap<int, QString> m_activeSegmentLogLines;
 
     void setToolsLoading(bool loading);
     void updateToolsSpinner();
@@ -82,6 +93,8 @@ private:
                            const QString &segmentAudioPath,
                            const QString &segmentOutputBasePath,
                            const QString &languageCode,
+                           bool useGpu,
+                           int whisperThreadCount,
                            int segmentIndex,
                            int segmentCount,
                            double segmentDurationSeconds);
@@ -96,6 +109,9 @@ private:
         static QString srtToTimestampedText(const QString &srtContent);
         static QString srtToWebVtt(const QString &srtContent);
     static QString segmentRangeLabel(double startSeconds, double durationSeconds);
+        QString buildParallelStatusSummaryLocked(int segmentCount, int overallPercent) const;
+        void renderWorkflowLogConsole();
+        void updateSegmentProgressLog(int segmentIndex, int progressPercent, bool finished);
 
     /// @brief 追加一行日志到页面日志栏
     void appendWorkflowLog(const QString &message);
