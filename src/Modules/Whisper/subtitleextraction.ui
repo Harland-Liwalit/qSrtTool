@@ -81,13 +81,10 @@
            </size>
           </property>
           <property name="toolTip">
-           <string>检查并更新 yt-dlp / whisper / ffmpeg</string>
-          </property>
-          <property name="autoRaise">
-           <bool>true</bool>
+             <string>检查并更新依赖（yt-dlp / whisper / ffmpeg）</string>
           </property>
           <property name="icon">
-           <iconset resource="style.qrc">
+           <iconset resource="../../../resources/style.qrc">
             <normaloff>:/new/prefix1/style/QSS_IMG/object-select-symbolic.symbolic.png</normaloff>:/new/prefix1/style/QSS_IMG/object-select-symbolic.symbolic.png</iconset>
           </property>
           <property name="iconSize">
@@ -95,6 +92,9 @@
             <width>18</width>
             <height>18</height>
            </size>
+          </property>
+          <property name="autoRaise">
+           <bool>true</bool>
           </property>
          </widget>
         </item>
@@ -161,7 +161,7 @@
         <item row="0" column="2">
          <widget class="QPushButton" name="importModelButton">
           <property name="text">
-            <string>打开模型目录</string>
+           <string>打开模型目录</string>
           </property>
          </widget>
         </item>
@@ -231,19 +231,12 @@
           </item>
          </widget>
         </item>
-        <item row="1" column="2">
-         <widget class="QCheckBox" name="translateCheckBox">
-          <property name="text">
-           <string>翻译</string>
-          </property>
-         </widget>
-        </item>
        </layout>
       </item>
       <item>
        <widget class="QGroupBox" name="transcribeGroupBox">
         <property name="title">
-         <string>转写文件</string>
+           <string>转写任务</string>
         </property>
         <layout class="QVBoxLayout" name="transcribeLayout">
          <property name="spacing">
@@ -275,49 +268,27 @@
               <string notr="true">color: #6E737A;</string>
              </property>
              <property name="text">
-              <string>输出格式</string>
+              <string>中间文件目录</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QComboBox" name="outputFormatComboBox">
+            <widget class="QLineEdit" name="tempDirLineEdit">
              <property name="minimumSize">
               <size>
                <width>220</width>
                <height>0</height>
               </size>
              </property>
-             <item>
-              <property name="text">
-               <string>SubRip (SRT)</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>WebVTT (VTT)</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>ASS (高级字幕)</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>纯文本 (TXT)</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>JSON (含时间轴)</string>
-              </property>
-             </item>
+             <property name="placeholderText">
+              <string>分段音频与中间字幕暂存目录</string>
+             </property>
             </widget>
            </item>
            <item>
-            <widget class="QCheckBox" name="outputToInputCheckBox">
+            <widget class="QPushButton" name="tempDirBrowseButton">
              <property name="text">
-              <string>将输出保存到输入目录</string>
+              <string>...</string>
              </property>
             </widget>
            </item>
@@ -338,10 +309,47 @@
          </item>
          <item>
           <layout class="QHBoxLayout" name="outputRowLayout">
+             <item>
+              <widget class="QLabel" name="outputFormatLabel">
+               <property name="styleSheet">
+                <string notr="true">color: #6E737A;</string>
+               </property>
+               <property name="text">
+                <string>输出格式</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="outputFormatComboBox">
+               <item>
+                <property name="text">
+                 <string>TXT</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>TXT（带时间）</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>SRT</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>WebVTT</string>
+                </property>
+               </item>
+               <property name="currentIndex">
+                <number>2</number>
+               </property>
+              </widget>
+             </item>
            <item>
             <widget class="QLineEdit" name="outputLineEdit">
              <property name="placeholderText">
-              <string>输出字幕文件路径</string>
+              <string>最终字幕输出目录</string>
              </property>
             </widget>
            </item>
@@ -372,7 +380,10 @@
            <item>
             <widget class="QCheckBox" name="debugConsoleCheckBox">
              <property name="text">
-              <string>Debug Console</string>
+              <string>完成后清理中间文件</string>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
              </property>
             </widget>
            </item>
@@ -397,55 +408,55 @@
      </layout>
     </widget>
    </item>
-    <item>
-     <widget class="QFrame" name="logFrame">
-      <property name="styleSheet">
-        <string notr="true">background-color: #FFFFFF; border-radius: 10px;</string>
+   <item>
+    <widget class="QFrame" name="logFrame">
+     <property name="styleSheet">
+      <string notr="true">background-color: #FFFFFF; border-radius: 10px;</string>
+     </property>
+     <layout class="QVBoxLayout" name="logLayout">
+      <property name="spacing">
+       <number>8</number>
       </property>
-      <layout class="QVBoxLayout" name="logLayout">
-        <property name="spacing">
-         <number>8</number>
+      <property name="leftMargin">
+       <number>16</number>
+      </property>
+      <property name="topMargin">
+       <number>16</number>
+      </property>
+      <property name="rightMargin">
+       <number>16</number>
+      </property>
+      <property name="bottomMargin">
+       <number>16</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="logTitleLabel">
+        <property name="styleSheet">
+         <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
         </property>
-        <property name="leftMargin">
-         <number>16</number>
+        <property name="text">
+         <string>任务日志与进度</string>
         </property>
-        <property name="topMargin">
-         <number>16</number>
+       </widget>
+      </item>
+      <item>
+       <widget class="QTextEdit" name="logTextEdit">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>140</height>
+         </size>
         </property>
-        <property name="rightMargin">
-         <number>16</number>
+        <property name="placeholderText">
+         <string/>
         </property>
-        <property name="bottomMargin">
-         <number>16</number>
-        </property>
-        <item>
-         <widget class="QLabel" name="logTitleLabel">
-          <property name="styleSheet">
-            <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
-          </property>
-          <property name="text">
-            <string>日志与状态流</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QTextEdit" name="logTextEdit">
-          <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>140</height>
-            </size>
-          </property>
-          <property name="placeholderText">
-            <string></string>
-          </property>
-         </widget>
-        </item>
-      </layout>
-     </widget>
-    </item>
-    <item>
-     <layout class="QHBoxLayout" name="bottomButtonLayout">
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="bottomButtonLayout">
      <item>
       <widget class="QPushButton" name="backButton">
        <property name="text">
@@ -476,7 +487,7 @@
      <item>
       <widget class="QPushButton" name="closeButton">
        <property name="text">
-        <string>关闭</string>
+        <string>转到下一步</string>
        </property>
       </widget>
      </item>
@@ -484,6 +495,8 @@
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../../resources/style.qrc"/>
+ </resources>
  <connections/>
 </ui>
