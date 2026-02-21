@@ -24,6 +24,10 @@ public:
     /// @param videoPath 视频文件的绝对路径
     void loadVideoFile(const QString &videoPath);
 
+signals:
+    void statusMessage(const QString &message);
+    void progressChanged(int percent);
+
 private:
     Ui::SubtitleExtraction *ui;
     QTimer *m_toolsSpinTimer = nullptr;
@@ -33,6 +37,7 @@ private:
     bool m_isRunning = false;
     bool m_cancelRequested = false;
     QProcess *m_activeProcess = nullptr;
+    int m_lastProgressPercent = -1;
 
     void setToolsLoading(bool loading);
     void updateToolsSpinner();
@@ -76,7 +81,10 @@ private:
                            const QString &modelPath,
                            const QString &segmentAudioPath,
                            const QString &segmentOutputBasePath,
-                           const QString &languageCode);
+                           const QString &languageCode,
+                           int segmentIndex,
+                           int segmentCount,
+                           double segmentDurationSeconds);
 
     /// @brief SRT 时间与拼接辅助
     static bool parseSrtTimestamp(const QString &text, qint64 &milliseconds);
