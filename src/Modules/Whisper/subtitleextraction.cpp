@@ -425,10 +425,28 @@ void SubtitleExtraction::startTranscriptionWorkflow()
     }
 
     QStringList segmentSrtFiles;
-    const int segmentSeconds = 5 * 60;
+    
+    // 动态计算最优分段长度：确保所有进程都有工作，但不超过5分钟
+    int segmentSeconds = 5 * 60;  // 默认最长5分钟
+    if (allSuccess && durationSeconds > 0.0) {
+        const int cpuThreads = qMax(2, QThread::idealThreadCount());
+        const int maxWorkers = qMax(1, qMin(4, cpuThreads / 4));
+        
+        // 最优分段时长 = min(5分钟, 总时长/进程数)
+        // 这样可确保：短视频时按总长/进程分段，长视频时保持5分钟最大值
+        const int optimalSegmentSeconds = static_cast<int>(durationSeconds / maxWorkers);
+        segmentSeconds = qMin(5 * 60, optimalSegmentSeconds);
+    }
+    
     const int segmentCount = allSuccess ? qCeil(durationSeconds / static_cast<double>(segmentSeconds)) : 0;
     if (allSuccess) {
-        appendWorkflowLog(tr("分段策略：每 5 分钟一段，共 %1 段").arg(segmentCount));
+        const int segmentMinutes = segmentSeconds / 60;
+        const int segmentRemainderSeconds = segmentSeconds % 60;
+        if (segmentRemainderSeconds > 0) {
+            appendWorkflowLog(tr("分段策略：每 %1 分 %2 秒一段，共 %3 段").arg(segmentMinutes).arg(segmentRemainderSeconds).arg(segmentCount));
+        } else {
+            appendWorkflowLog(tr("分段策略：每 %1 分钟一段，共 %2 段").arg(segmentMinutes).arg(segmentCount));
+        }
     }
 
     // 初始化分段进度跟踪
