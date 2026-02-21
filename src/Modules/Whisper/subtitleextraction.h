@@ -5,6 +5,7 @@
 #include <QIcon>
 
 class QTimer;
+class QShowEvent;
 
 namespace Ui {
 class SubtitleExtraction;
@@ -31,6 +32,13 @@ private:
 
     void setToolsLoading(bool loading);
     void updateToolsSpinner();
+    QString whisperModelsDirPath() const;
+    void ensureModelDirectories();
+    void refreshWhisperModelList();
+    void openWhisperModelsDirectory();
+
+protected:
+    void showEvent(QShowEvent *event) override;
 };
 
 #endif // SUBTITLEEXTRACTION_H

@@ -314,6 +314,10 @@ void MainWindow::teardownPerformanceCounters()
 
 void MainWindow::initializeDependencies()
 {
+    QDir runtimeDir(QDir::currentPath());
+    runtimeDir.mkpath("models/whisper");
+    runtimeDir.mkpath("models/LLM");
+
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString appPath = QDir(appDir).filePath("resources/dependencies.json");
     const QString cwdPath = QDir::currentPath() + "/resources/dependencies.json";

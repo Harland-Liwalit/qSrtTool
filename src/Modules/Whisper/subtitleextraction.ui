@@ -161,7 +161,7 @@
         <item row="0" column="2">
          <widget class="QPushButton" name="importModelButton">
           <property name="text">
-           <string>导入模型</string>
+            <string>打开模型目录</string>
           </property>
          </widget>
         </item>

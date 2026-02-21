@@ -1,10 +1,15 @@
 #include "subtitleextraction.h"
 #include "ui_subtitleextraction.h"
 
+#include <QDesktopServices>
+#include <QDir>
 #include <QFileInfo>
+#include <QFileInfoList>
+#include <QShowEvent>
 #include <QTimer>
 #include <QToolButton>
 #include <QTransform>
+#include <QUrl>
 
 #include "../../Core/dependencymanager.h"
 
@@ -14,6 +19,9 @@ SubtitleExtraction::SubtitleExtraction(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    ensureModelDirectories();
+    refreshWhisperModelList();
+
     m_toolsBaseIcon = ui->toolsCheckButton->icon();
     m_toolsSpinTimer = new QTimer(this);
     m_toolsSpinTimer->setInterval(60);
@@ -21,6 +29,11 @@ SubtitleExtraction::SubtitleExtraction(QWidget *parent) :
 
     connect(ui->toolsCheckButton, &QToolButton::clicked, this, []() {
         DependencyManager::instance().checkForUpdates();
+    });
+
+    connect(ui->importModelButton, &QPushButton::clicked, this, [this]() {
+        openWhisperModelsDirectory();
+        refreshWhisperModelList();
     });
 
     auto &manager = DependencyManager::instance();
@@ -73,4 +86,56 @@ void SubtitleExtraction::updateToolsSpinner()
     transform.rotate(m_toolsSpinAngle);
     ui->toolsCheckButton->setIcon(QIcon(pixmap.transformed(transform, Qt::SmoothTransformation)));
     m_toolsSpinAngle = (m_toolsSpinAngle + 30) % 360;
+}
+
+QString SubtitleExtraction::whisperModelsDirPath() const
+{
+    return QDir(QDir::currentPath()).filePath("models/whisper");
+}
+
+void SubtitleExtraction::ensureModelDirectories()
+{
+    QDir runtimeDir(QDir::currentPath());
+    runtimeDir.mkpath("models/whisper");
+    runtimeDir.mkpath("models/LLM");
+}
+
+void SubtitleExtraction::refreshWhisperModelList()
+{
+    if (!ui || !ui->modelComboBox) {
+        return;
+    }
+
+    const QString modelDirPath = whisperModelsDirPath();
+    QDir modelDir(modelDirPath);
+    if (!modelDir.exists()) {
+        modelDir.mkpath(".");
+    }
+
+    const QString currentSelection = ui->modelComboBox->currentText();
+    ui->modelComboBox->clear();
+
+    const QFileInfoList entries = modelDir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot, QDir::Name | QDir::IgnoreCase);
+    for (const QFileInfo &entry : entries) {
+        ui->modelComboBox->addItem(entry.fileName());
+    }
+
+    if (!currentSelection.isEmpty()) {
+        const int index = ui->modelComboBox->findText(currentSelection);
+        if (index >= 0) {
+            ui->modelComboBox->setCurrentIndex(index);
+        }
+    }
+}
+
+void SubtitleExtraction::openWhisperModelsDirectory()
+{
+    ensureModelDirectories();
+    QDesktopServices::openUrl(QUrl::fromLocalFile(whisperModelsDirPath()));
+}
+
+void SubtitleExtraction::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    refreshWhisperModelList();
 }
