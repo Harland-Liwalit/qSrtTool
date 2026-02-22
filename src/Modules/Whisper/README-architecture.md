@@ -134,27 +134,26 @@ QStringList whisperCmd = WhisperCommandBuilder::buildWhisperTranscribeArgs(
 **当前流程**（简化视图）：
 ```
 开始转写按钮
-  ↓
+    ↓
 startTranscriptionWorkflow()
-  ├─ 校验并解析依赖
-  ├─ 探测视频时长
-  ├─ 计算分段数（5分钟/段）
-  ├─ 第一阶段：并行提取音频
-  │   ├─ extractSegmentAudio()
-  │   │   └─ 使用 WhisperCommandBuilder::buildFfmpegExtractArgs()
-  │   └─ (4-6 个并行工作线程)
-  ├─ 第二阶段：并行转录字幕
-  │   ├─ TranscribeWorker::run()
-  │   │   └─ 使用 WhisperCommandBuilder::buildWhisperTranscribeArgs()
-  │   └─ (4-6 个并行工作线程)
-  ├─ 第三阶段：合并与转换
-  │   ├─ WhisperSegmentMerger::mergeSegmentSrtFiles()
-  │   │   ├─ 遍历分段 SRT 文件
-  │   │   ├─ 时间轴偏移（通过 shiftedSrtContent()）
-  │   │   ├─ 全局索引重编
-  │   │   └─ 格式转换
-  │   └─ 写出最终文件
-  └─ 清理中间文件（可选）
+    ├─ 校验并解析依赖
+    ├─ 探测视频时长
+    ├─ 动态分段
+    │   └─ 每段时长 = min(5分钟, ceil(总时长/worker数))
+    ├─ 第一阶段：顺序提取所有分段音频
+    │   ├─ extractSegmentAudio()
+    │   └─ 使用 WhisperCommandBuilder::buildFfmpegExtractArgs()
+    ├─ 第二阶段：并行转录所有分段
+    │   ├─ QThreadPool::globalInstance() + QRunnable(TranscribeWorker)
+    │   ├─ worker数 = min(4, CPU线程/4)
+    │   ├─ 每个 whisper 线程数 = (CPU线程-2)/worker数
+    │   └─ transcribeSegment() 内含 stdout/stderr 持续抽干 + 99%收尾超时保护(120s)
+    ├─ 第三阶段：合并与转换
+    │   ├─ WhisperSegmentMerger::mergeSegmentSrtFiles()
+    │   ├─ 时间轴偏移 + 索引重编 + 格式转换
+    │   └─ 写出最终文件
+    ├─ 记录任务总耗时日志
+    └─ 清理中间文件（可选）
 ```
 
 ---
@@ -174,6 +173,18 @@ startTranscriptionWorkflow()
 - 使用 `QMutex *m_resultLock` 保护结果向量
 - 每个 worker 分别报告自己的进度（避免竞争条件）
 
+### 5. 线程池与进程复用（当前行为）
+
+**结论**：
+- **线程会复用**：任务通过 `QThreadPool::globalInstance()->start(worker)` 提交，超过 `maxThreadCount` 的任务会排队；已有线程在任务完成后会从队列继续取下一个任务执行。
+- **worker 对象不复用**：每个分段都会 `new TranscribeWorker(...)`，执行完成后由 `QRunnable` 默认自动删除（`autoDelete=true`）。
+- **Whisper 进程不复用**：每个分段在 `transcribeSegment()` 内部创建局部 `QProcess process`，分段结束即退出销毁；下一段会重新启动一个新的 whisper 进程。
+
+**排队时资源状态**：
+- 处于排队状态的是 `QRunnable` 任务对象。
+- 正在运行的线程属于线程池并可复用。
+- 外部 `whisper.exe` 进程仅在任务运行期间存在，不会放回池中复用。
+
 ---
 
 ## 性能与并行化策略
@@ -183,18 +194,20 @@ startTranscriptionWorkflow()
 |------|---------|---------|---------|
 | v1.0 | 20 分钟 | 串行 | ≈ 2.0 |
 | v1.1 | 20 分钟 | 串行，参数优化 | ≈ 1.5 |
-| v2.0 | 5 分钟 | 并行，4-6 workers | ≈ 0.4-0.6 |
+| v2.0 | 固定 5 分钟 | 并行，最多 4 workers | ≈ 0.4-0.6 |
+| v2.1 | 动态分段（上限 5 分钟） | 并行，最多 4 workers | 视素材而定 |
 
 **关键优化**：
-1. **分段缩小**：20 分钟 → 5 分钟（便于并行）
-2. **线程池**：`QThreadPool` + 4-6 workers （CPU 核数 / 4）
-3. **自动线程检测**：`WhisperCommandBuilder` 自动设置 `-t` 参数
-4. **语言检测跳过**：指定语言时追加 `-np` 参数
+1. **动态分段**：`min(5分钟, ceil(总时长/worker数))`，短视频也能让 worker 更均衡地并行。
+2. **线程池并发上限**：`maxWorkers = max(1, min(4, CPU线程/4))`，避免过度并发拖慢 UI。
+3. **每进程线程预算**：`whisperThreadCount = max(1, (CPU线程-2)/maxWorkers)`，保留 UI 余量。
+4. **收尾稳定性**：循环抽干输出管道，99% 阶段 120 秒无活动自动终止，避免长时间卡死。
+5. **任务级可观测性**：日志显示每段实时进度、并行状态汇总，以及“本次转写总耗时”。
 
 ### 进度报告机制
-- **粒度**：每个分段 10% 进度间隔报告一次
+- **粒度**：每个分段按 1% 变化实时更新
 - **保护**：所有进度更新受 `QMutex m_progressLock` 保护
-- **显示**：主界面状态栏实时显示全局进度百分比
+- **显示**：状态栏显示“进行中段落 + 总进度”，日志区保留历史并对活跃段做原位刷新
 
 ---
 

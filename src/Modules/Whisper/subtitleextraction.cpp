@@ -395,6 +395,22 @@ void SubtitleExtraction::startTranscriptionWorkflow()
     m_cancelRequested = false;
     m_lastProgressPercent = -1;
     updateRunningStateUi(true);
+    QElapsedTimer workflowTimer;
+    workflowTimer.start();
+
+    const auto formatElapsedDuration = [](qint64 elapsedMs) -> QString {
+        const qint64 totalSeconds = qMax<qint64>(0, elapsedMs / 1000);
+        const qint64 hours = totalSeconds / 3600;
+        const qint64 minutes = (totalSeconds % 3600) / 60;
+        const qint64 seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return QObject::tr("%1 小时 %2 分 %3 秒").arg(hours).arg(minutes).arg(seconds);
+        }
+        if (minutes > 0) {
+            return QObject::tr("%1 分 %2 秒").arg(minutes).arg(seconds);
+        }
+        return QObject::tr("%1 秒").arg(seconds);
+    };
 
     // 为本次任务创建唯一中间目录，任务完成后按配置清理。
     const QString jobDirName = QString("job_%1").arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss_zzz"));
@@ -434,8 +450,9 @@ void SubtitleExtraction::startTranscriptionWorkflow()
         
         // 最优分段时长 = min(5分钟, 总时长/进程数)
         // 这样可确保：短视频时按总长/进程分段，长视频时保持5分钟最大值
-        const int optimalSegmentSeconds = static_cast<int>(durationSeconds / maxWorkers);
-        segmentSeconds = qMin(5 * 60, optimalSegmentSeconds);
+        // 使用向上取整，避免因向下取整导致多出一个很短的尾段
+        const int optimalSegmentSeconds = qCeil(durationSeconds / static_cast<double>(maxWorkers));
+        segmentSeconds = qMax(1, qMin(5 * 60, optimalSegmentSeconds));
     }
     
     const int segmentCount = allSuccess ? qCeil(durationSeconds / static_cast<double>(segmentSeconds)) : 0;
@@ -614,11 +631,13 @@ void SubtitleExtraction::startTranscriptionWorkflow()
     updateRunningStateUi(false);
 
     if (!allSuccess) {
+        appendWorkflowLog(tr("本次转写总耗时：%1").arg(formatElapsedDuration(workflowTimer.elapsed())));
         appendWorkflowLog(tr("任务结束：%1").arg(failureMessage.isEmpty() ? tr("任务已停止或执行失败。") : failureMessage));
         QMessageBox::warning(this, tr("识别未完成"), failureMessage.isEmpty() ? tr("任务已停止或执行失败。") : failureMessage);
         return;
     }
 
+    appendWorkflowLog(tr("本次转写总耗时：%1").arg(formatElapsedDuration(workflowTimer.elapsed())));
     appendWorkflowLog(tr("全部完成，字幕已生成"));
     QMessageBox::information(this, tr("识别完成"), tr("字幕文件已输出到：\n%1").arg(outputFilePath));
 }
@@ -976,9 +995,19 @@ QString SubtitleExtraction::srtToWebVtt(const QString &srtContent)
 
 QString SubtitleExtraction::segmentRangeLabel(double startSeconds, double durationSeconds)
 {
-    const int startMin = qFloor(startSeconds / 60.0);
-    const int endMin = qCeil((startSeconds + durationSeconds) / 60.0);
-    return QString("%1-%2 分钟").arg(startMin).arg(endMin);
+    const int startTotalSec = qMax(0, qRound(startSeconds));
+    const int endTotalSec = qMax(startTotalSec, qRound(startSeconds + durationSeconds));
+
+    const int startMin = startTotalSec / 60;
+    const int startSec = startTotalSec % 60;
+    const int endMin = endTotalSec / 60;
+    const int endSec = endTotalSec % 60;
+
+    return tr("%1:%2-%3:%4")
+        .arg(startMin)
+        .arg(startSec, 2, 10, QLatin1Char('0'))
+        .arg(endMin)
+        .arg(endSec, 2, 10, QLatin1Char('0'));
 }
 
 QString SubtitleExtraction::buildParallelStatusSummaryLocked(int segmentCount, int overallPercent) const
