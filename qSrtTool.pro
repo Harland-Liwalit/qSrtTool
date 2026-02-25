@@ -18,6 +18,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     src/Core/dependencymanager.cpp \
+    src/Core/executablecapabilities.cpp \
     src/Modules/Loader/embeddedffmpegplayer.cpp \
     src/Widgets/logconsole.cpp \
     src/Widgets/pageswitchconfirmdialog.cpp \
@@ -29,12 +30,14 @@ SOURCES += \
     src/Modules/Whisper/subtitleextraction.cpp \
     src/Modules/Whisper/whispersegmentmerger.cpp \
     src/Modules/Whisper/whispercommandbuilder.cpp \
+    src/Modules/Whisper/whisperruntimeselector.cpp \
     src/Modules/Translator/subtitletranslation.cpp \
     src/Modules/Downloder/videodownloader.cpp \
     src/Modules/Loader/videoloader.cpp
 
 HEADERS += \
     src/Core/dependencymanager.h \
+    src/Core/executablecapabilities.h \
     src/Modules/Loader/embeddedffmpegplayer.h \
     src/Widgets/logconsole.h \
     src/Widgets/pageswitchconfirmdialog.h \
@@ -45,6 +48,7 @@ HEADERS += \
     src/Modules/Whisper/subtitleextraction.h \
     src/Modules/Whisper/whispersegmentmerger.h \
     src/Modules/Whisper/whispercommandbuilder.h \
+    src/Modules/Whisper/whisperruntimeselector.h \
     src/Modules/Translator/subtitletranslation.h \
     src/Modules/Downloder/videodownloader.h \
     src/Modules/Loader/videoloader.h

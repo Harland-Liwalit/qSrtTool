@@ -21,14 +21,26 @@
       "minVersion": "2024.0.0"
     },
     {
-      "id": "whisper",
-      "name": "whisper.cpp",
-      "executable": "whisper.exe",
+      "id": "whisper-cpu",
+      "name": "whisper.cpp (CPU)",
+      "executable": "whisper/cpu/whisper-cli.exe",
       "versionArg": "--version",
       "versionPattern": "version: ([\\d\\.]+)",
-      "latestVersionApi": "https://api.github.com/repos/ggerganov/whisper.cpp/releases/latest",
-      "downloadUrlTemplate": "https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-bin-x64.zip",
-      "minVersion": "1.0"
+      "latestVersionApi": "https://api.github.com/repos/ggml-org/whisper.cpp/releases/latest",
+      "downloadUrlTemplate": "https://github.com/ggml-org/whisper.cpp/releases/latest/download/whisper-bin-x64.zip",
+      "minVersion": "1.0",
+      "installSubDir": "whisper/cpu"
+    },
+    {
+      "id": "whisper-cuda",
+      "name": "whisper.cpp (CUDA)",
+      "executable": "whisper/cuda/whisper-cli.exe",
+      "versionArg": "--version",
+      "versionPattern": "version: ([\\d\\.]+)",
+      "latestVersionApi": "https://api.github.com/repos/ggml-org/whisper.cpp/releases/latest",
+      "downloadUrlTemplate": "https://github.com/ggml-org/whisper.cpp/releases/latest/download/whisper-cublas-12.4.0-bin-x64.zip",
+      "minVersion": "1.0",
+      "installSubDir": "whisper/cuda"
     }
   ]
 }

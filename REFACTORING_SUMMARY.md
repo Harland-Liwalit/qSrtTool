@@ -332,19 +332,153 @@ src/Modules/Whisper/
 
 ---
 
+## 第四部分：可执行文件能力检测系统（新增）
+
+### 背景
+
+在双 CPU/CUDA 二进制系统和后续的第三方软件集成中，发现需要统一的版本检测机制来：
+- 自动识别软件版本
+- 根据版本动态调整 CLI 参数
+- 优雅处理版本过旧的情况
+
+### ExecutableCapabilitiesDetector 系统（✅ 已完成）
+
+**路径**：`src/Core/executablecapabilities.h/cpp`  
+**文档**：`src/Core/EXECUTABLECAPABILITIES-README.md`
+
+**核心功能**：
+- 统一检测 **Whisper.cpp**、**FFmpeg** 和 **yt-dlp** 的版本及能力
+- 根据版本判断支持的 CLI 参数
+- 缓存版本信息避免重复检测
+
+**新增结构体**：`ExecutableCapabilities`
+```cpp
+struct ExecutableCapabilities {
+    QString name;                    // 软件名称
+    QString executablePath;          // 可执行文件路径  
+    QString version;                 // 版本号（如 "1.5.4"）
+    bool isAvailable;                // 是否可用
+    bool isSupported;                // 版本是否被支持
+    QString unsupportedReason;       // 不支持的原因
+    
+    // 功能标志（根据版本动态设置）
+    bool whisperSupportsGpu;         // Whisper: -ng 标志支持
+    bool whisperSupportsThreads;     // Whisper: -t 标志支持
+    bool whisperSupportsLanguage;    // Whisper: -l 标志支持
+    bool ffmpegHasRtmp;              // FFmpeg: RTMP 协议支持
+    bool ffmpegHasHardwareAccel;     // FFmpeg: 硬件加速支持
+    bool ytDlpSupportsPlaylist;      // yt-dlp: 播放列表支持
+    bool ytDlpSupportsFragments;     // yt-dlp: 分片下载支持
+};
+```
+
+**新增检测方法**：
+```cpp
+class ExecutableCapabilitiesDetector {
+public:
+    static ExecutableCapabilities detectWhisper(const QString &execPath);
+    static ExecutableCapabilities detectFfmpeg(const QString &execPath);
+    static ExecutableCapabilities detectYtDlp(const QString &execPath);
+    
+    // 辅助方法
+    static QString executeCommandWithTimeout(const QString &program, 
+                                             const QStringList &args, 
+                                             int timeoutMs = 5000);
+    static QString extractVersionNumber(const QString &versionOutput);
+};
+```
+
+**版本支持表**：
+
+| 软件 | 版本范围 | GPU | 线程 | 语言 | 硬加速 | 说明 |
+|------|---------|-----|------|------|--------|------|
+| Whisper | < 1.4 | ❌ | ❌ | ❌ | - | 不支持 |
+| Whisper | 1.4-1.4.x | ❌ | ✅ | ✅ | - | 有限支持 |
+| Whisper | ≥ 1.5 | ✅ | ✅ | ✅ | - | 完全支持 |
+| FFmpeg | < 5.0 | - | - | - | ❌ | 不支持 |
+| FFmpeg | ≥ 5.0 | - | - | - | ✅ | 完全支持 |
+| yt-dlp | < 2022.01 | - | - | - | - | 不支持 |
+| yt-dlp | ≥ 2022.01 | - | - | - | - | 完全支持 |
+
+### 集成点
+
+#### 1. WhisperCommandBuilder 适配（✅ 已完成）
+
+**修改**：`src/Modules/Whisper/whispercommandbuilder.h/cpp`
+
+- 在 `buildWhisperTranscribeArgs()` 方法中添加可选的 `ExecutableCapabilities *capabilities` 参数
+- 根据版本能力标志条件性地添加 `-ng`、`-t`、`-l` 参数
+- 保证向后兼容性（未提供参数时使用默认行为）
+
+```cpp
+static QStringList buildWhisperTranscribeArgs(
+    const QString &modelPath,
+    const QString &audioPath,
+    const QString &outputBasePath,
+    const QString &languageCode,
+    bool useGpu,
+    int threadCountHint = -1,
+    const ExecutableCapabilities *capabilities = nullptr);  // 新增参数
+```
+
+#### 2. SubtitleExtraction 集成（✅ 已完成）
+
+**修改**：`src/Modules/Whisper/subtitleextraction.cpp`
+
+- 在 `transcribeSegment()` 方法中调用 `ExecutableCapabilitiesDetector::detectWhisper()`
+- 将检测结果传递给 `WhisperCommandBuilder::buildWhisperTranscribeArgs()`
+- 确保命令行参数根据 Whisper 版本动态生成
+
+```cpp
+// 检测 Whisper 可执行文件的能力
+ExecutableCapabilities whisperCaps = ExecutableCapabilitiesDetector::detectWhisper(whisperPath);
+
+// 根据检测到的能力构建命令行
+const QStringList args = WhisperCommandBuilder::buildWhisperTranscribeArgs(
+    modelPath, segmentAudioPath, segmentOutputBasePath, languageCode,
+    useGpu, whisperThreadCount, &whisperCaps);
+```
+
+### 设计特点
+
+1. **统一接口**：三个不同软件的检测通过统一的 API 访问
+2. **版本容错**：自动检测和适配版本差异，避免因版本过旧导致命令失败
+3. **超时保护**：所有版本检测命令都配置 5 秒超时，防止阻塞
+4. **可扩展性**：设计允许轻松添加新软件的版本检测
+5. **性能友好**：版本信息可被缓存至 `.qsrottool_dep_cache` JSON 文件
+
+### 文件变更
+
+**新增文件**：
+- `src/Core/executablecapabilities.h` (~80 行)
+- `src/Core/executablecapabilities.cpp` (~180 行)
+- `src/Core/EXECUTABLECAPABILITIES-README.md` (~300 行架构文档)
+
+**修改文件**：
+- `src/Modules/Whisper/whispercommandbuilder.h` - 添加参数和声明
+- `src/Modules/Whisper/whispercommandbuilder.cpp` - 条件性参数生成逻辑
+- `src/Modules/Whisper/subtitleextraction.cpp` - 添加检测调用
+- `qSrtTool.pro` - 注册新文件
+
+---
+
 ## 总结
 
-本次重构成功将 Whisper 模块从单体设计演进到三层分离架构，提高了代码的：
+本次重构成功将 Whisper 模块，然后整个项目的第三方软件集成，提升到了一个新的成熟度：
 
 1. **可复用性**：三个独立组件可在其他项目中单独使用
 2. **可维护性**：每个组件职责单一，易于理解和修改
 3. **可测试性**：各组件可独立进行单元测试
-4. **向后兼容性**：所有原有接口保持不变，现有代码无需修改
+4. **版本兼容性**：能够自动适配不同版本的第三方软件
+5. **向后兼容性**：所有原有接口保持不变，现有代码无需修改
 
 **关键指标**：
 - 代码去重：删除 ~187 行重复代码
 - 新增代码：~240 行（功能等价，但结构更优）
-- 文档补充：~400 行架构文档
+- 版本检测系统：~260 行新增核心代码
+- 文档补充：~700 行架构文档
 - 编译状态：✅ 就绪（qSrtTool.pro 已更新）
 
-**预期编译结果**：项目应该能够正常编译运行，功能与性能保持不变，但代码结构更清晰。
+**预期编译结果**：项目应该能够正常编译运行，功能与性能保持不变，但代码结构更清晰，第三方软件适配更灵活。
+
+

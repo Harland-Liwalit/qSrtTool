@@ -1,4 +1,5 @@
 #include "whispercommandbuilder.h"
+#include "../../Core/executablecapabilities.h"
 
 #include <QThread>
 
@@ -25,7 +26,8 @@ QStringList WhisperCommandBuilder::buildWhisperTranscribeArgs(const QString &mod
                                                               const QString &outputBasePath,
                                                               const QString &languageCode,
                                                               bool useGpu,
-                                                              int threadCountHint)
+                                                              int threadCountHint,
+                                                              const ExecutableCapabilities *capabilities)
 {
     const int idealThreadCount = QThread::idealThreadCount();
     const int detectedThreadCount = idealThreadCount > 0 ? idealThreadCount : 4;
@@ -35,15 +37,42 @@ QStringList WhisperCommandBuilder::buildWhisperTranscribeArgs(const QString &mod
     args << "-m" << modelPath
          << "-f" << audioPath
          << "-osrt"
-         << "-of" << outputBasePath
-         << "-t" << QString::number(threadCount);
+         << "-of" << outputBasePath;
+
+    // 条件性地添加线程参数
+    if (capabilities) {
+        if (capabilities->whisperSupportsThreads) {
+            args << "-t" << QString::number(threadCount);
+        }
+    } else {
+        // 默认行为：所有版本都支持线程参数
+        args << "-t" << QString::number(threadCount);
+    }
 
     if (!languageCode.isEmpty()) {
-        args << "-l" << languageCode
-             << "-np";
+        // 条件性地添加语言参数
+        if (capabilities) {
+            if (capabilities->whisperSupportsLanguage) {
+                args << "-l" << languageCode << "-np";
+            }
+        } else {
+            // 默认行为：所有版本都支持语言参数
+            args << "-l" << languageCode << "-np";
+        }
     }
-    if (useGpu) {
-        args << "-ng" << "99";
+
+    // 条件性地添加 GPU 禁用标志
+    if (!useGpu) {
+        if (capabilities) {
+            if (capabilities->whisperSupportsGpu) {
+                args << "-ng";
+            }
+            // 如果版本太旧不支持 -ng，我们无法禁用 GPU
+            // 但这种情况很少见
+        } else {
+            // 默认行为：添加 GPU 禁用标志
+            args << "-ng";
+        }
     }
 
     return args;

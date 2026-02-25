@@ -2,6 +2,8 @@
 #include "ui_subtitleextraction.h"
 #include "whispersegmentmerger.h"
 #include "whispercommandbuilder.h"
+#include "whisperruntimeselector.h"
+#include "../../Core/executablecapabilities.h"
 
 #include <QDesktopServices>
 #include <QDateTime>
@@ -310,9 +312,9 @@ QString SubtitleExtraction::resolveFfmpegPath() const
     return resolveExecutableInDeps(QStringList() << "ffmpeg.exe");
 }
 
-QString SubtitleExtraction::resolveWhisperPath() const
+WhisperRuntimeSelection SubtitleExtraction::resolveWhisperRuntimeSelection(bool preferCuda) const
 {
-    return resolveExecutableInDeps(QStringList() << "whisper.exe" << "whisper-cli.exe");
+    return WhisperRuntimeSelector::selectExecutable(preferCuda);
 }
 
 QString SubtitleExtraction::selectedModelPath() const
@@ -361,7 +363,9 @@ void SubtitleExtraction::startTranscriptionWorkflow()
     }
 
     const QString ffmpegPath = resolveFfmpegPath();
-    const QString whisperPath = resolveWhisperPath();
+    const bool preferCuda = ui->gpuCheckBox && ui->gpuCheckBox->isChecked();
+    const WhisperRuntimeSelection whisperRuntime = resolveWhisperRuntimeSelection(preferCuda);
+    const QString whisperPath = whisperRuntime.executablePath;
     const QString modelPath = selectedModelPath();
     if (ffmpegPath.isEmpty()) {
         QMessageBox::warning(this, tr("依赖缺失"), tr("未检测到 ffmpeg.exe，请先在 deps 目录准备 FFmpeg。"));
@@ -392,7 +396,7 @@ void SubtitleExtraction::startTranscriptionWorkflow()
         return;
     }
 
-    m_cancelRequested = false;
+    m_cancelRequested.store(false);
     m_lastProgressPercent = -1;
     updateRunningStateUi(true);
     QElapsedTimer workflowTimer;
@@ -431,6 +435,9 @@ void SubtitleExtraction::startTranscriptionWorkflow()
     appendWorkflowLog(tr("识别模型：%1").arg(QFileInfo(modelPath).fileName()));
     appendWorkflowLog(tr("输出格式：%1").arg(outputFormatText));
     appendWorkflowLog(tr("GPU 加速：%1").arg(ui->gpuCheckBox && ui->gpuCheckBox->isChecked() ? tr("已开启") : tr("未开启")));
+    appendWorkflowLog(tr("Whisper 后端：%1（%2）")
+                      .arg(whisperRuntime.usingCudaBuild ? tr("CUDA 优先版本") : tr("CPU 版本"))
+                      .arg(QFileInfo(whisperPath).fileName()));
     emit progressChanged(0);
 
     double durationSeconds = 0.0;
@@ -482,7 +489,7 @@ void SubtitleExtraction::startTranscriptionWorkflow()
     QVector<SegmentInfo> segments;
 
     for (int index = 0; allSuccess && index < segmentCount; ++index) {
-        if (m_cancelRequested) {
+        if (m_cancelRequested.load()) {
             allSuccess = false;
             failureMessage = tr("任务已停止。");
             break;
@@ -500,7 +507,7 @@ void SubtitleExtraction::startTranscriptionWorkflow()
 
         if (!extractSegmentAudio(ffmpegPath, inputPath, startSeconds, currentDuration, segmentAudioPath)) {
             allSuccess = false;
-            if (!m_cancelRequested) {
+            if (!m_cancelRequested.load()) {
                 failureMessage = tr("音频分段失败，请检查输入文件或 FFmpeg 是否可用。");
                 appendWorkflowLog(tr("第 %1/%2 段分段失败（%3）").arg(index + 1).arg(segmentCount).arg(rangeText));
             }
@@ -531,15 +538,15 @@ void SubtitleExtraction::startTranscriptionWorkflow()
         QMutex resultLock;
 
         for (int i = 0; i < segments.size(); ++i) {
-            if (m_cancelRequested) {
+            if (m_cancelRequested.load()) {
                 allSuccess = false;
                 failureMessage = tr("任务已停止。");
                 break;
             }
 
             const SegmentInfo seg = segments[i];
-            const QString whisperPathLocal = resolveWhisperPath();
-            const QString modelPathLocal = selectedModelPath();
+            const QString whisperPathLocal = whisperPath;
+            const QString modelPathLocal = modelPath;
 
             TranscribeWorker *worker = new TranscribeWorker(this, seg, whisperPathLocal, modelPathLocal,
                                                             languageCode, useGpu, whisperThreadCount, segments.size(), &resultLock, &segmentResults);
@@ -547,7 +554,7 @@ void SubtitleExtraction::startTranscriptionWorkflow()
         }
 
         while (pool->activeThreadCount() > 0) {
-            if (m_cancelRequested) {
+            if (m_cancelRequested.load()) {
                 pool->clear();
             }
             QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
@@ -555,7 +562,7 @@ void SubtitleExtraction::startTranscriptionWorkflow()
         }
 
         for (int i = 0; i < segments.size(); ++i) {
-            if (m_cancelRequested) {
+            if (m_cancelRequested.load()) {
                 allSuccess = false;
                 failureMessage = tr("任务已停止。");
                 break;
@@ -563,7 +570,7 @@ void SubtitleExtraction::startTranscriptionWorkflow()
 
             if (!segmentResults[i]) {
                 allSuccess = false;
-                if (!m_cancelRequested) {
+                if (!m_cancelRequested.load()) {
                     failureMessage = tr("Whisper 识别失败，请检查模型文件和 whisper 版本。");
                     appendWorkflowLog(tr("第 %1 段识别失败").arg(segments[i].index + 1));
                 }
@@ -644,32 +651,15 @@ void SubtitleExtraction::startTranscriptionWorkflow()
 
 void SubtitleExtraction::requestStopWorkflow()
 {
-    // 仅设置停止标记；若外部进程正在运行则尝试终止。
-    m_cancelRequested = true;
+    // 仅设置停止标记，实际进程终止由进程所属线程自行执行，避免跨线程操作 QProcess。
+    m_cancelRequested.store(true);
     appendWorkflowLog(tr("正在停止任务，请稍候..."));
-    QProcess *activeProcess = nullptr;
-    {
-        QMutexLocker locker(&m_processLock);
-        activeProcess = m_activeProcess;
-    }
-
-    if (activeProcess && activeProcess->state() != QProcess::NotRunning) {
-        activeProcess->terminate();
-        if (!activeProcess->waitForFinished(800)) {
-            activeProcess->kill();
-            activeProcess->waitForFinished(1000);
-        }
-    }
 }
 
 bool SubtitleExtraction::runProcessCancelable(const QString &program, const QStringList &arguments, QString *stdErrOutput)
 {
     QProcess process;
     QString stdErrTail;
-    {
-        QMutexLocker locker(&m_processLock);
-        m_activeProcess = &process;
-    }
     process.setProgram(program);
     process.setArguments(arguments);
     process.setProcessChannelMode(QProcess::SeparateChannels);
@@ -679,27 +669,15 @@ bool SubtitleExtraction::runProcessCancelable(const QString &program, const QStr
         if (stdErrOutput) {
             *stdErrOutput = process.errorString();
         }
-        {
-            QMutexLocker locker(&m_processLock);
-            if (m_activeProcess == &process) {
-                m_activeProcess = nullptr;
-            }
-        }
         return false;
     }
 
     while (process.state() != QProcess::NotRunning) {
-        if (m_cancelRequested) {
+        if (m_cancelRequested.load()) {
             process.terminate();
             if (!process.waitForFinished(800)) {
                 process.kill();
                 process.waitForFinished(1200);
-            }
-            {
-                QMutexLocker locker(&m_processLock);
-                if (m_activeProcess == &process) {
-                    m_activeProcess = nullptr;
-                }
             }
             return false;
         }
@@ -727,12 +705,6 @@ bool SubtitleExtraction::runProcessCancelable(const QString &program, const QStr
         *stdErrOutput = stdErrTail;
     }
 
-    {
-        QMutexLocker locker(&m_processLock);
-        if (m_activeProcess == &process) {
-            m_activeProcess = nullptr;
-        }
-    }
     return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
 }
 
@@ -792,17 +764,16 @@ bool SubtitleExtraction::transcribeSegment(const QString &whisperPath,
                                            int segmentCount,
                                            double segmentDurationSeconds)
 {
+    // 检测 Whisper 可执行文件的能力
+    ExecutableCapabilities whisperCaps = ExecutableCapabilitiesDetector::detectWhisper(whisperPath);
+    
     const QStringList args = WhisperCommandBuilder::buildWhisperTranscribeArgs(
         modelPath, segmentAudioPath, segmentOutputBasePath, languageCode,
-        useGpu, whisperThreadCount);
+        useGpu, whisperThreadCount, &whisperCaps);
 
     QString stdErr;
     QString stdErrTail;
     QProcess process;
-    {
-        QMutexLocker locker(&m_processLock);
-        m_activeProcess = &process;
-    }
     process.setProgram(whisperPath);
     process.setArguments(args);
     process.setProcessChannelMode(QProcess::SeparateChannels);
@@ -810,12 +781,6 @@ bool SubtitleExtraction::transcribeSegment(const QString &whisperPath,
 
     if (!process.waitForStarted(5000)) {
         stdErr = process.errorString();
-        {
-            QMutexLocker locker(&m_processLock);
-            if (m_activeProcess == &process) {
-                m_activeProcess = nullptr;
-            }
-        }
         return false;
     }
 
@@ -833,17 +798,11 @@ bool SubtitleExtraction::transcribeSegment(const QString &whisperPath,
     updateSegmentProgressLog(segmentIndex, 0, false);
 
     while (process.state() != QProcess::NotRunning) {
-        if (m_cancelRequested) {
+        if (m_cancelRequested.load()) {
             process.terminate();
             if (!process.waitForFinished(800)) {
                 process.kill();
                 process.waitForFinished(1200);
-            }
-            {
-                QMutexLocker locker(&m_processLock);
-                if (m_activeProcess == &process) {
-                    m_activeProcess = nullptr;
-                }
             }
             return false;
         }
@@ -941,12 +900,6 @@ bool SubtitleExtraction::transcribeSegment(const QString &whisperPath,
     updateSegmentProgressLog(segmentIndex, 100, true);
     emit statusMessage(finalParallelSummary);
     const bool ok = process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
-    {
-        QMutexLocker locker(&m_processLock);
-        if (m_activeProcess == &process) {
-            m_activeProcess = nullptr;
-        }
-    }
     if (!ok && !stdErr.trimmed().isEmpty()) {
         appendWorkflowLog(tr("Whisper 错误：%1").arg(stdErr.trimmed()));
     }

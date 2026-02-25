@@ -47,6 +47,7 @@ void DependencyManager::initialize(const QString& dependenciesJsonPath) {
         info.latestVersionApi = obj["latestVersionApi"].toString();
         info.downloadUrlTemplate = obj["downloadUrlTemplate"].toString();
         info.minVersion = obj["minVersion"].toString();
+        info.installSubDir = obj["installSubDir"].toString();
         info.needsUpdate = false;
         info.isInstalled = false;
 
@@ -160,6 +161,23 @@ bool DependencyManager::isBusy() const
 
 void DependencyManager::cancelAllOperations()
 {
+    for (auto it = m_activeDownloadFiles.begin(); it != m_activeDownloadFiles.end(); ++it) {
+        QFile *partialFile = it.value();
+        if (!partialFile) {
+            continue;
+        }
+
+        const QString tempPath = partialFile->fileName();
+        if (partialFile->isOpen()) {
+            partialFile->close();
+        }
+        delete partialFile;
+        if (!tempPath.isEmpty()) {
+            QFile::remove(tempPath);
+        }
+    }
+    m_activeDownloadFiles.clear();
+
     const QList<QNetworkReply *> replies = m_netManager->findChildren<QNetworkReply *>();
     for (QNetworkReply *reply : replies) {
         if (!reply) {
@@ -213,9 +231,9 @@ void DependencyManager::onVersionReplyFinished() {
 
         // 版本比较或缺失回退
         if (info.localVersion.isEmpty()) {
-            info.needsUpdate = true; // 未安装，需要下载
+            info.needsUpdate = true;
         } else if (!info.latestVersion.isEmpty() && compareVersions(info.localVersion, info.latestVersion) < 0) {
-            info.needsUpdate = true; // 有新版本
+            info.needsUpdate = true;
         } else {
             info.needsUpdate = false;
         }
@@ -230,6 +248,8 @@ void DependencyManager::onVersionReplyFinished() {
 }
 
 QString DependencyManager::parseLatestVersion(const QJsonObject& json, const QString& depId) {
+    Q_UNUSED(depId);
+
     // GitHub Releases API 返回 tag_name
     QString tagName = json["tag_name"].toString();
 
@@ -279,15 +299,63 @@ void DependencyManager::downloadUpdate(const QString& depId, const QString& save
 #if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
     request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
 #endif
+
+    QFileInfo saveInfo(savePath);
+    if (!saveInfo.absolutePath().isEmpty()) {
+        QDir().mkpath(saveInfo.absolutePath());
+    }
+
+    const QString tempPath = savePath + ".part";
+    QFile::remove(tempPath);
+    QFile *partialFile = new QFile(tempPath);
+    if (!partialFile->open(QIODevice::WriteOnly)) {
+        delete partialFile;
+        emit downloadFailed(depId, "无法创建下载临时文件");
+        if (m_pendingDownloads > 0) {
+            --m_pendingDownloads;
+        }
+        if (m_pendingDownloads == 0 && m_pendingVersionReplies == 0) {
+            setBusy(false);
+        }
+        return;
+    }
+
     QNetworkReply* reply = m_netManager->get(request);
     reply->setProperty("depId", depId);
     reply->setProperty("savePath", savePath);
     reply->setProperty("redirectCount", 0);
+    m_activeDownloadFiles.insert(reply, partialFile);
 
     connect(reply, &QNetworkReply::downloadProgress,
             this, &DependencyManager::onDownloadProgress);
+    connect(reply, &QNetworkReply::readyRead,
+            this, &DependencyManager::onDownloadReadyRead);
     connect(reply, &QNetworkReply::finished,
             this, &DependencyManager::onDownloadReplyFinished);
+}
+
+void DependencyManager::onDownloadReadyRead()
+{
+    QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
+    if (!reply) {
+        return;
+    }
+
+    QFile *partialFile = m_activeDownloadFiles.value(reply, nullptr);
+    if (!partialFile || !partialFile->isOpen()) {
+        return;
+    }
+
+    const QByteArray chunk = reply->readAll();
+    if (chunk.isEmpty()) {
+        return;
+    }
+
+    if (partialFile->write(chunk) != chunk.size()) {
+        const QString depId = reply->property("depId").toString();
+        emit downloadFailed(depId, "写入下载文件失败");
+        reply->abort();
+    }
 }
 
 void DependencyManager::onDownloadProgress(qint64 received, qint64 total) {
@@ -307,9 +375,19 @@ void DependencyManager::onDownloadReplyFinished() {
     QString depId = reply->property("depId").toString();
     QString savePath = reply->property("savePath").toString();
     const int redirectCount = reply->property("redirectCount").toInt();
+    const QString tempPath = savePath + ".part";
+    QFile *partialFile = m_activeDownloadFiles.take(reply);
 
     const QVariant redirectAttr = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
     if (redirectAttr.isValid()) {
+        if (partialFile) {
+            if (partialFile->isOpen()) {
+                partialFile->close();
+            }
+            delete partialFile;
+            QFile::remove(tempPath);
+        }
+
         const QUrl redirectUrl = reply->url().resolved(redirectAttr.toUrl());
         if (redirectUrl.isValid() && redirectCount < 5) {
             QNetworkRequest request(redirectUrl);
@@ -317,13 +395,32 @@ void DependencyManager::onDownloadReplyFinished() {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
             request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
 #endif
+
+            QFile::remove(tempPath);
+            QFile *redirectFile = new QFile(tempPath);
+            if (!redirectFile->open(QIODevice::WriteOnly)) {
+                delete redirectFile;
+                emit downloadFailed(depId, "无法创建下载临时文件");
+                reply->deleteLater();
+                if (m_pendingDownloads > 0) {
+                    --m_pendingDownloads;
+                }
+                if (m_pendingDownloads == 0 && m_pendingVersionReplies == 0) {
+                    setBusy(false);
+                }
+                return;
+            }
+
             QNetworkReply* newReply = m_netManager->get(request);
             newReply->setProperty("depId", depId);
             newReply->setProperty("savePath", savePath);
             newReply->setProperty("redirectCount", redirectCount + 1);
+            m_activeDownloadFiles.insert(newReply, redirectFile);
 
             connect(newReply, &QNetworkReply::downloadProgress,
                     this, &DependencyManager::onDownloadProgress);
+            connect(newReply, &QNetworkReply::readyRead,
+                    this, &DependencyManager::onDownloadReadyRead);
             connect(newReply, &QNetworkReply::finished,
                     this, &DependencyManager::onDownloadReplyFinished);
 
@@ -333,6 +430,13 @@ void DependencyManager::onDownloadReplyFinished() {
     }
 
     if (reply->error() != QNetworkReply::NoError) {
+        if (partialFile) {
+            if (partialFile->isOpen()) {
+                partialFile->close();
+            }
+            delete partialFile;
+            QFile::remove(tempPath);
+        }
         emit downloadFailed(depId, networkErrorToChinese(reply));
         reply->deleteLater();
         if (m_pendingDownloads > 0) {
@@ -344,37 +448,57 @@ void DependencyManager::onDownloadReplyFinished() {
         return;
     }
 
-    // 保存文件
-    QFile file(savePath);
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(reply->readAll());
-        file.close();
-
-        QFileInfo savedInfo(savePath);
-        if (savedInfo.suffix().compare("zip", Qt::CaseInsensitive) == 0) {
-            QString extractError;
-            if (!extractZipArchive(savePath, QFileInfo(savePath).absolutePath(), &extractError)) {
-                emit downloadFailed(depId, extractError.isEmpty() ? "解压失败" : extractError);
-                reply->deleteLater();
-                if (m_pendingDownloads > 0) {
-                    --m_pendingDownloads;
-                }
-                if (m_pendingDownloads == 0 && m_pendingVersionReplies == 0) {
-                    setBusy(false);
-                }
-                return;
-            }
-
-            QFile::remove(savePath);
+    if (partialFile) {
+        const QByteArray tail = reply->readAll();
+        if (!tail.isEmpty()) {
+            partialFile->write(tail);
         }
-
-        if (m_dependencies.contains(depId)) {
-            m_dependencies[depId].needsUpdate = false;
-        }
-        emit downloadFinished(depId, savePath);
-    } else {
-        emit downloadFailed(depId, "无法保存文件");
+        partialFile->flush();
+        partialFile->close();
+        delete partialFile;
     }
+
+    QFile::remove(savePath);
+    if (!QFile::rename(tempPath, savePath)) {
+        QFile::remove(tempPath);
+        emit downloadFailed(depId, "无法保存文件");
+        reply->deleteLater();
+        if (m_pendingDownloads > 0) {
+            --m_pendingDownloads;
+        }
+        if (m_pendingDownloads == 0 && m_pendingVersionReplies == 0) {
+            setBusy(false);
+        }
+        return;
+    }
+
+    QFileInfo savedInfo(savePath);
+    if (savedInfo.suffix().compare("zip", Qt::CaseInsensitive) == 0) {
+        QString extractError;
+        if (!extractZipArchive(savePath, QFileInfo(savePath).absolutePath(), &extractError)) {
+            emit downloadFailed(depId, extractError.isEmpty() ? "解压失败" : extractError);
+            reply->deleteLater();
+            if (m_pendingDownloads > 0) {
+                --m_pendingDownloads;
+            }
+            if (m_pendingDownloads == 0 && m_pendingVersionReplies == 0) {
+                setBusy(false);
+            }
+            return;
+        }
+
+        QFile::remove(savePath);
+    }
+
+    if (m_dependencies.contains(depId)) {
+        DependencyInfo& info = m_dependencies[depId];
+        info.needsUpdate = false;
+        
+        if (!info.latestVersion.isEmpty()) {
+            info.localVersion = info.latestVersion;
+        }
+    }
+    emit downloadFinished(depId, savePath);
 
     reply->deleteLater();
 
@@ -562,7 +686,13 @@ void DependencyManager::startPendingDownloads()
             fileName = info.id + ".bin";
         }
 
-        const QString savePath = QDir(depsDir).filePath(fileName);
+        QString targetDir = depsDir;
+        if (!info.installSubDir.trimmed().isEmpty()) {
+            targetDir = QDir(depsDir).filePath(info.installSubDir.trimmed());
+            QDir().mkpath(targetDir);
+        }
+
+        const QString savePath = QDir(targetDir).filePath(fileName);
         downloadUpdate(info.id, savePath);
     }
 

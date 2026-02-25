@@ -28,6 +28,11 @@ public:
     ~MainWindow();
 
 private:
+    struct DownloadProgressInfo {
+        qint64 received = 0;
+        qint64 total = 0;
+    };
+
     Ui::MainWindow *ui;
     QTimer *perfTimer = nullptr;
     bool m_dependencyAutoTriggered = false;
@@ -36,6 +41,7 @@ private:
     SubtitleExtraction *m_whisperPage = nullptr;
     QHash<QToolButton *, QWidget *> m_navToPage;
     QHash<QToolButton *, QString> m_navFeatureNames;
+    QHash<QString, DownloadProgressInfo> m_dependencyDownloadProgress;
 
     void setupPerformanceCounters();
     void updatePerformanceMetrics();
@@ -43,6 +49,8 @@ private:
     void initializeDependencies();
     void triggerDependencyCheckOnce();
     void setStatusHint(const QString &message);
+    QString dependencyDisplayName(const QString &depId) const;
+    void refreshDependencyDownloadStatus();
 
     /// @brief 绑定侧边导航按钮到目标页面
     /// @param button 导航按钮

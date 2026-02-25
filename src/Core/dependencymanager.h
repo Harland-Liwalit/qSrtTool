@@ -6,7 +6,11 @@
 #include <QJsonObject>
 #include <QList>
 #include <QMap>
+#include <QHash>
 #include <QNetworkAccessManager>
+
+class QFile;
+class QNetworkReply;
 
 struct DependencyInfo {
     QString id;
@@ -17,6 +21,7 @@ struct DependencyInfo {
     QString latestVersionApi;
     QString downloadUrlTemplate;
     QString minVersion;
+    QString installSubDir;
 
     // 运行时信息
     QString localVersion;
@@ -75,6 +80,7 @@ private slots:
     void onVersionReplyFinished();
     void onDownloadReplyFinished();
     void onDownloadProgress(qint64 received, qint64 total);
+    void onDownloadReadyRead();
 
 private:
     DependencyManager();
@@ -102,6 +108,7 @@ private:
     int m_pendingDownloads = 0;
     bool m_busy = false;
     bool m_hadUpdateCheckError = false;
+    QHash<QNetworkReply*, QFile*> m_activeDownloadFiles;
 };
 
 #endif // DEPENDENCYMANAGER_H

@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QStringList>
 
 #include <QtGlobal>
 
@@ -145,6 +146,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto &depManager = DependencyManager::instance();
     connect(&depManager, &DependencyManager::busyChanged, this, [this](bool busy) {
+        if (!busy) {
+            m_dependencyDownloadProgress.clear();
+            const QString cachePath = QDir::currentPath() + "/.qsrottool_dep_cache";
+            DependencyManager::instance().saveVersionCache(cachePath);
+        }
         setStatusHint(busy ? tr("正在检查/下载依赖...") : tr("依赖检查完成"));
     });
     connect(&depManager, &DependencyManager::updateCheckFailed, this, [this](const QString &error) {
@@ -164,6 +170,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(&depManager, &DependencyManager::downloadFinished, this, [this](const QString &depId, const QString &savePath) {
         Q_UNUSED(savePath);
+        m_dependencyDownloadProgress.remove(depId);
         QString name = depId;
         const auto deps = DependencyManager::instance().getAllDependencies();
         for (const auto &info : deps) {
@@ -172,12 +179,26 @@ MainWindow::MainWindow(QWidget *parent)
                 break;
             }
         }
+        if (!m_dependencyDownloadProgress.isEmpty()) {
+            refreshDependencyDownloadStatus();
+            return;
+        }
+
         setStatusHint(tr("下载完成: %1").arg(name));
     });
     connect(&depManager, &DependencyManager::downloadFailed, this, [this](const QString &depId, const QString &error) {
-        Q_UNUSED(depId);
+        m_dependencyDownloadProgress.remove(depId);
+        if (!m_dependencyDownloadProgress.isEmpty()) {
+            refreshDependencyDownloadStatus();
+        }
         setStatusHint(tr("依赖下载失败: %1").arg(error));
         QMessageBox::warning(this, tr("依赖下载失败"), error);
+    });
+    connect(&depManager, &DependencyManager::downloadProgress, this, [this](const QString &depId, qint64 received, qint64 total) {
+        DownloadProgressInfo &info = m_dependencyDownloadProgress[depId];
+        info.received = qMax<qint64>(0, received);
+        info.total = qMax<qint64>(0, total);
+        refreshDependencyDownloadStatus();
     });
 
     setupPerformanceCounters();
@@ -335,6 +356,10 @@ void MainWindow::initializeDependencies()
 
     if (!resolvedPath.isEmpty()) {
         DependencyManager::instance().initialize(resolvedPath);
+        
+        const QString cachePath = QDir::currentPath() + "/.qsrottool_dep_cache";
+        DependencyManager::instance().loadVersionCache(cachePath);
+        
         setStatusHint(tr("依赖清单已加载"));
     } else {
         setStatusHint(tr("未找到依赖清单: resources/dependencies.json"));
@@ -358,6 +383,50 @@ void MainWindow::setStatusHint(const QString &message)
         return;
     }
     ui->statusHintLabel->setText(message);
+}
+
+QString MainWindow::dependencyDisplayName(const QString &depId) const
+{
+    const auto deps = DependencyManager::instance().getAllDependencies();
+    for (const auto &info : deps) {
+        if (info.id == depId) {
+            return info.name.isEmpty() ? depId : info.name;
+        }
+    }
+
+    return depId;
+}
+
+void MainWindow::refreshDependencyDownloadStatus()
+{
+    if (m_dependencyDownloadProgress.isEmpty()) {
+        return;
+    }
+
+    QStringList taskSummaries;
+    for (auto it = m_dependencyDownloadProgress.constBegin(); it != m_dependencyDownloadProgress.constEnd(); ++it) {
+        const QString name = dependencyDisplayName(it.key());
+        const qint64 received = it.value().received;
+        const qint64 total = it.value().total;
+
+        QString progressText;
+        if (total > 0) {
+            const int percent = qBound(0, static_cast<int>((received * 100) / total), 100);
+            progressText = tr("%1% (%2/%3 MB)")
+                               .arg(percent)
+                               .arg(QString::number(received / 1024.0 / 1024.0, 'f', 1))
+                               .arg(QString::number(total / 1024.0 / 1024.0, 'f', 1));
+        } else {
+            progressText = tr("已下载 %1 MB")
+                               .arg(QString::number(received / 1024.0 / 1024.0, 'f', 1));
+        }
+
+        taskSummaries << tr("%1：%2").arg(name, progressText);
+    }
+
+    setStatusHint(tr("下载中（%1项）：%2")
+                      .arg(m_dependencyDownloadProgress.size())
+                      .arg(taskSummaries.join(tr(" | "))));
 }
 
 /// @brief 绑定侧边导航按钮的点击事件到页面切换逻辑

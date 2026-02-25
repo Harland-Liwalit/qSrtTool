@@ -5,13 +5,14 @@
 #include <QIcon>
 #include <QMutex>
 #include <QMap>
+#include <atomic>
 
 class QTimer;
 class QShowEvent;
-class QProcess;
 class TranscribeWorker;
 class WhisperSegmentMerger;
 class WhisperCommandBuilder;
+struct WhisperRuntimeSelection;
 
 namespace Ui {
 class SubtitleExtraction;
@@ -41,10 +42,8 @@ private:
     int m_toolsSpinAngle = 0;
     bool m_toolsLoading = false;
     bool m_isRunning = false;
-    bool m_cancelRequested = false;
-    QProcess *m_activeProcess = nullptr;
+    std::atomic_bool m_cancelRequested{false};
     int m_lastProgressPercent = -1;
-    QMutex m_processLock;
     QMutex m_progressLock;
     QMap<int, int> m_segmentProgress;
     QStringList m_workflowLogHistory;
@@ -74,7 +73,7 @@ private:
     /// @brief 解析依赖可执行文件路径
     QString resolveExecutableInDeps(const QStringList &candidateNames) const;
     QString resolveFfmpegPath() const;
-    QString resolveWhisperPath() const;
+    WhisperRuntimeSelection resolveWhisperRuntimeSelection(bool preferCuda) const;
     QString selectedModelPath() const;
 
     /// @brief 执行外部进程（支持停止）
