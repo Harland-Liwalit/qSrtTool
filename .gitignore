@@ -1,6 +1,7 @@
 # Build directories (Qt Creator and generic build outputs)
 /build/
 /build-*/
+/Release/
 
 # Qt Creator user/session files
 *.pro.user

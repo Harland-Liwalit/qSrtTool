@@ -4,6 +4,7 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++11
 win32: LIBS += -lpdh
+win32: LIBS += -lcrypt32
 
 # The following define makes your compiler emit warnings if you use
 # any Qt feature that has been marked deprecated (the exact warnings
@@ -20,6 +21,7 @@ SOURCES += \
     src/Core/dependencymanager.cpp \
     src/Core/executablecapabilities.cpp \
     src/Modules/Loader/embeddedffmpegplayer.cpp \
+    src/Modules/Translator/llmserviceclient.cpp \
     src/Modules/Translator/promptediting.cpp \
     src/Widgets/logconsole.cpp \
     src/Widgets/pageswitchconfirmdialog.cpp \
@@ -40,6 +42,7 @@ HEADERS += \
     src/Core/dependencymanager.h \
     src/Core/executablecapabilities.h \
     src/Modules/Loader/embeddedffmpegplayer.h \
+    src/Modules/Translator/llmserviceclient.h \
     src/Modules/Translator/promptediting.h \
     src/Widgets/logconsole.h \
     src/Widgets/pageswitchconfirmdialog.h \
