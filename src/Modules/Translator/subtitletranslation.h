@@ -16,7 +16,15 @@ public:
     ~SubtitleTranslation();
 
 private:
+    void initializePresetStorage();
+    void refreshPresetList(const QString &preferredPath = QString());
+    QString selectedPresetPath() const;
+
+    void importPresetToStorage();
+    void openPromptEditingDialog();
+
     Ui::SubtitleTranslation *ui;
+    QString m_presetDirectory;
 };
 
 #endif // SUBTITLETRANSLATION_H

@@ -20,6 +20,7 @@ SOURCES += \
     src/Core/dependencymanager.cpp \
     src/Core/executablecapabilities.cpp \
     src/Modules/Loader/embeddedffmpegplayer.cpp \
+    src/Modules/Translator/promptediting.cpp \
     src/Widgets/logconsole.cpp \
     src/Widgets/pageswitchconfirmdialog.cpp \
     src/Widgets/progressbox.cpp \
@@ -39,6 +40,7 @@ HEADERS += \
     src/Core/dependencymanager.h \
     src/Core/executablecapabilities.h \
     src/Modules/Loader/embeddedffmpegplayer.h \
+    src/Modules/Translator/promptediting.h \
     src/Widgets/logconsole.h \
     src/Widgets/pageswitchconfirmdialog.h \
     src/Widgets/progressbox.h \
@@ -54,6 +56,7 @@ HEADERS += \
     src/Modules/Loader/videoloader.h
 
 FORMS += \
+    src/Modules/Translator/promptediting.ui \
     src/mainwindow.ui \
     src/Modules/OutputMgr/outputmanagement.ui \
     src/Modules/Burner/subtitleburning.ui \

@@ -1,0 +1,1063 @@
+<ui version="4.0">
+ <class>PromptEditing</class>
+ <widget class="QDialog" name="PromptEditing">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1180</width>
+    <height>760</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>980</width>
+    <height>680</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+    <string>qSrtTool 预设编辑器</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QDialog#PromptEditing { background-color: #F4F6F8; }
+QFrame#topBarFrame, QFrame#leftPanelFrame, QFrame#rightPanelFrame {
+    background-color: #FFFFFF;
+    border: 1px solid #CBD5DF;
+    border-radius: 12px;
+}
+QLabel { color: #2B2F33; }
+QLabel#titleLabel { font: 700 15pt &quot;Microsoft YaHei&quot;; }
+QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    background-color: #FFFFFF;
+    border: 1px solid #7F8B96;
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: #2B2F33;
+}
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+    border: 1px solid #2F7D66;
+}
+QComboBox::drop-down {
+    border-left: 1px solid #7F8B96;
+    width: 24px;
+}
+QComboBox::down-arrow {
+    image: url(:/new/prefix1/style/QSS_IMG/go-down-symbolic.symbolic.png);
+    width: 12px;
+    height: 12px;
+}
+QComboBox::down-arrow:on {
+    image: url(:/new/prefix1/style/QSS_IMG/go-up-symbolic.symbolic.png);
+}
+QPushButton {
+    background-color: #F7F9FB;
+    color: #1F2328;
+    border: 1px solid #7F8B96;
+    border-radius: 8px;
+    padding: 6px 14px;
+}
+QPushButton:hover { background-color: #EEF2F6; }
+QPushButton:pressed {
+    background-color: #E1E7ED;
+    padding-top: 8px;
+    padding-bottom: 6px;
+}
+QPushButton#exportPresetButton, QPushButton#savePresetButton {
+    background-color: #1FA87A;
+    color: #FFFFFF;
+    border: 1px solid #1A8F68;
+}
+QPushButton#exportPresetButton:hover, QPushButton#savePresetButton:hover { background-color: #19966B; }
+QPushButton#exportPresetButton:pressed, QPushButton#savePresetButton:pressed { background-color: #157E5A; }
+QTabWidget::pane {
+    border: 1px solid #CBD5DF;
+    border-radius: 8px;
+    background: #FFFFFF;
+    top: -1px;
+}
+QTabBar::tab {
+    background: #ECF0F3;
+    color: #2B2F33;
+    border: 1px solid #CBD5DF;
+    padding: 8px 22px;
+    min-width: 140px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    background: #FFFFFF;
+    border-bottom-color: #FFFFFF;
+    font-weight: 600;
+}
+QListWidget {
+    background-color: #FFFFFF;
+    border: 1px solid #CBD5DF;
+    border-radius: 6px;
+    padding: 4px;
+}
+QListWidget::item {
+    padding: 6px 8px;
+    border-radius: 4px;
+}
+QListWidget::item:selected {
+    background-color: #DDEFE9;
+    color: #1E2A24;
+}
+QCheckBox { color: #2B2F33; }
+QGroupBox {
+    border: 1px solid #CBD5DF;
+    border-radius: 8px;
+    margin-top: 10px;
+    padding-top: 12px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: #4A4F55;
+    font-weight: 600;
+}
+QSplitter::handle {
+    background-color: #D4DBE3;
+    width: 2px;
+}</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>12</number>
+   </property>
+   <property name="leftMargin">
+    <number>12</number>
+   </property>
+   <property name="topMargin">
+    <number>12</number>
+   </property>
+   <property name="rightMargin">
+    <number>12</number>
+   </property>
+   <property name="bottomMargin">
+    <number>12</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="topBarFrame">
+     <layout class="QHBoxLayout" name="topBarLayout">
+      <property name="leftMargin">
+       <number>14</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>14</number>
+      </property>
+      <property name="bottomMargin">
+       <number>12</number>
+      </property>
+      <item>
+       <layout class="QVBoxLayout" name="titleLayout">
+        <item>
+         <widget class="QLabel" name="titleLabel">
+          <property name="text">
+                     <string>qSrtTool 预设编辑器</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <spacer name="topSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="topActionLayout">
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <item>
+         <widget class="QPushButton" name="newPresetButton">
+          <property name="text">
+           <string>新建预设</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="importPresetFileButton">
+          <property name="text">
+           <string>导入 JSON</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="exportPresetButton">
+          <property name="text">
+           <string>导出预设</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="compatibilityLabel">
+          <property name="text">
+           <string>（兼容 ST 预设）</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QSplitter" name="editorSplitter">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <widget class="QFrame" name="leftPanelFrame">
+      <property name="minimumSize">
+       <size>
+        <width>320</width>
+        <height>0</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="leftPanelLayout">
+       <property name="leftMargin">
+        <number>12</number>
+       </property>
+       <property name="topMargin">
+        <number>12</number>
+       </property>
+       <property name="rightMargin">
+        <number>12</number>
+       </property>
+       <property name="bottomMargin">
+        <number>12</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="presetMetaLabel">
+         <property name="text">
+                    <string>Preset Meta（预设信息）</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">font: 600 11pt &quot;Microsoft YaHei&quot;;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QFormLayout" name="metaFormLayout">
+         <property name="horizontalSpacing">
+          <number>8</number>
+         </property>
+         <property name="verticalSpacing">
+          <number>8</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="QLabel" name="presetNameLabel">
+           <property name="text">
+                        <string>name（名称）</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="presetNameLineEdit">
+           <property name="placeholderText">
+                        <string>例如：我的翻译预设 v1</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="sourceLabel">
+           <property name="text">
+                        <string>chat_completion_source（来源）</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="chatSourceComboBox">
+           <item>
+            <property name="text">
+             <string>deepseek</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>openai</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>claude</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>openrouter</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>custom</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="seedLabel">
+           <property name="text">
+                        <string>seed（随机种子）</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QSpinBox" name="seedSpinBox">
+           <property name="minimum">
+            <number>-1</number>
+           </property>
+           <property name="maximum">
+            <number>2147483647</number>
+           </property>
+           <property name="value">
+            <number>-1</number>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="candidateLabel">
+           <property name="text">
+                        <string>n（候选数）</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QSpinBox" name="candidateSpinBox">
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="maximum">
+            <number>16</number>
+           </property>
+           <property name="value">
+            <number>1</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="modelGroupBox">
+         <property name="title">
+                    <string>Model Mapping（模型映射）</string>
+         </property>
+         <layout class="QFormLayout" name="modelFormLayout">
+          <property name="horizontalSpacing">
+           <number>8</number>
+          </property>
+          <property name="verticalSpacing">
+           <number>8</number>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="openRouterModelLabel">
+            <property name="text">
+                         <string>openrouter_model（OpenRouter模型）</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="openRouterModelLineEdit">
+            <property name="placeholderText">
+             <string>deepseek/deepseek-chat-v3.1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="claudeModelLabel">
+            <property name="text">
+                         <string>claude_model（Claude模型）</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLineEdit" name="claudeModelLineEdit"/>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="googleModelLabel">
+            <property name="text">
+                         <string>google_model（Google模型）</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLineEdit" name="googleModelLineEdit"/>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="customModelLabel">
+            <property name="text">
+                         <string>custom_model（自定义模型）</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QLineEdit" name="customModelLineEdit"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="flagsGroupBox">
+         <property name="title">
+                    <string>Runtime Flags（运行选项）</string>
+         </property>
+         <layout class="QVBoxLayout" name="flagsLayout">
+          <item>
+           <widget class="QCheckBox" name="streamOpenAiCheckBox">
+            <property name="text">
+                         <string>stream_openai（流式输出）</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="showThoughtsCheckBox">
+            <property name="text">
+                         <string>show_thoughts（显示思考）</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="enableWebSearchCheckBox">
+            <property name="text">
+                         <string>enable_web_search（启用联网搜索）</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="functionCallingCheckBox">
+            <property name="text">
+                         <string>function_calling（函数调用）</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="leftBottomSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QFrame" name="rightPanelFrame">
+      <layout class="QVBoxLayout" name="rightPanelLayout">
+       <property name="leftMargin">
+        <number>12</number>
+       </property>
+       <property name="topMargin">
+        <number>12</number>
+       </property>
+       <property name="rightMargin">
+        <number>12</number>
+       </property>
+       <property name="bottomMargin">
+        <number>12</number>
+       </property>
+       <item>
+        <widget class="QTabWidget" name="editorTabWidget">
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="samplingTab">
+          <attribute name="title">
+                     <string>Sampling（采样参数）</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="samplingTabLayout">
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+           <item>
+            <layout class="QFormLayout" name="samplingFormLayout">
+             <property name="horizontalSpacing">
+              <number>10</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>10</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QLabel" name="temperatureParamLabel">
+               <property name="text">
+                                <string>temperature（温度）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QDoubleSpinBox" name="temperatureDoubleSpinBox">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="minimum">
+                <double>0.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>2.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.010000000000000</double>
+               </property>
+               <property name="value">
+                <double>1.010000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="topPLabel">
+               <property name="text">
+                                <string>top_p（核采样）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QDoubleSpinBox" name="topPDoubleSpinBox">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="minimum">
+                <double>0.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>1.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.010000000000000</double>
+               </property>
+               <property name="value">
+                <double>1.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="topKLabel">
+               <property name="text">
+                                <string>top_k（候选截断）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QSpinBox" name="topKSpinBox">
+               <property name="maximum">
+                <number>1000</number>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="topALabel">
+               <property name="text">
+                                <string>top_a（自适应采样）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QDoubleSpinBox" name="topADoubleSpinBox">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="maximum">
+                <double>2.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.010000000000000</double>
+               </property>
+               <property name="value">
+                <double>1.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="minPLabel">
+               <property name="text">
+                                <string>min_p（最小概率）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QDoubleSpinBox" name="minPDoubleSpinBox">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="maximum">
+                <double>1.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.010000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="0">
+              <widget class="QLabel" name="frequencyPenaltyLabel">
+               <property name="text">
+                                <string>frequency_penalty（频率惩罚）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="1">
+              <widget class="QDoubleSpinBox" name="frequencyPenaltyDoubleSpinBox">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="minimum">
+                <double>-2.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>2.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="0">
+              <widget class="QLabel" name="presencePenaltyLabel">
+               <property name="text">
+                                <string>presence_penalty（存在惩罚）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="1">
+              <widget class="QDoubleSpinBox" name="presencePenaltyDoubleSpinBox">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="minimum">
+                <double>-2.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>2.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="0">
+              <widget class="QLabel" name="repetitionPenaltyLabel">
+               <property name="text">
+                                <string>repetition_penalty（重复惩罚）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="1">
+              <widget class="QDoubleSpinBox" name="repetitionPenaltyDoubleSpinBox">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="minimum">
+                <double>0.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>3.000000000000000</double>
+               </property>
+               <property name="value">
+                <double>1.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="promptsTab">
+          <attribute name="title">
+                     <string>Prompts（提示词）</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="promptsTabLayout">
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+           <item>
+            <layout class="QHBoxLayout" name="promptEditHeaderLayout">
+             <item>
+              <widget class="QLabel" name="promptListLabel">
+               <property name="text">
+                                <string>prompt list（条目）</string>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">font-weight: 600;</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="promptHeaderSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="addPromptButton">
+               <property name="text">
+                <string>新增</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="removePromptButton">
+               <property name="text">
+                <string>移除</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QListWidget" name="promptListWidget"/>
+           </item>
+           <item>
+            <layout class="QFormLayout" name="promptFormLayout">
+             <property name="horizontalSpacing">
+              <number>8</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>8</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QLabel" name="promptNameLabel">
+               <property name="text">
+                                <string>name（名称）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLineEdit" name="promptNameLineEdit"/>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="promptIdentifierLabel">
+               <property name="text">
+                                <string>identifier（标识符）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLineEdit" name="promptIdentifierLineEdit"/>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="promptRoleLabel">
+               <property name="text">
+                                <string>role（角色）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QComboBox" name="promptRoleComboBox">
+               <item>
+                <property name="text">
+                 <string>system</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>user</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>assistant</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QPlainTextEdit" name="promptContentTextEdit">
+             <property name="placeholderText">
+              <string>编辑当前 Prompt 的 content 字段...</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="arrangementTab">
+          <attribute name="title">
+           <string>Order &amp; Preview（编排与预览）</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="arrangementTabLayout">
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+           <item>
+            <widget class="QSplitter" name="arrangementSplitter">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <widget class="QWidget" name="orderPanelWidget">
+              <layout class="QVBoxLayout" name="orderPanelLayout">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <layout class="QHBoxLayout" name="characterHeaderLayout">
+                 <item>
+                  <widget class="QLabel" name="characterIdLabel">
+                   <property name="text">
+                    <string>character_id（角色ID）</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QSpinBox" name="characterIdSpinBox">
+                   <property name="maximum">
+                    <number>999999999</number>
+                   </property>
+                   <property name="value">
+                    <number>100000</number>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="characterSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="addOrderItemButton">
+                   <property name="text">
+                    <string>添加项</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="removeOrderItemButton">
+                   <property name="text">
+                    <string>删除项</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <widget class="QTableWidget" name="promptOrderTableWidget">
+                 <property name="dragEnabled">
+                  <bool>true</bool>
+                 </property>
+                 <property name="acceptDrops">
+                  <bool>true</bool>
+                 </property>
+                 <property name="dropIndicatorShown">
+                  <bool>true</bool>
+                 </property>
+                 <property name="dragDropOverwriteMode">
+                  <bool>false</bool>
+                 </property>
+                 <property name="dragDropMode">
+                  <enum>QAbstractItemView::InternalMove</enum>
+                 </property>
+                 <property name="defaultDropAction">
+                  <enum>Qt::MoveAction</enum>
+                 </property>
+                 <property name="selectionMode">
+                  <enum>QAbstractItemView::SingleSelection</enum>
+                 </property>
+                 <property name="selectionBehavior">
+                  <enum>QAbstractItemView::SelectRows</enum>
+                 </property>
+                 <property name="showGrid">
+                  <bool>false</bool>
+                 </property>
+                 <column>
+                  <property name="text">
+                   <string>order（序号）</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>name（条目名）</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>identifier（标识符）</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>enabled（启用）</string>
+                  </property>
+                 </column>
+                </widget>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="manualOrderLayout">
+                 <item>
+                  <widget class="QLabel" name="manualOrderLabel">
+                   <property name="text">
+                    <string>order（序号）</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QSpinBox" name="manualOrderSpinBox">
+                   <property name="minimum">
+                    <number>1</number>
+                   </property>
+                   <property name="maximum">
+                    <number>999</number>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="applyOrderButton">
+                   <property name="text">
+                    <string>设置顺序</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="manualOrderSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
+             <widget class="QWidget" name="previewPanelWidget">
+              <layout class="QVBoxLayout" name="previewPanelLayout">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QPlainTextEdit" name="jsonPreviewTextEdit">
+                 <property name="readOnly">
+                  <bool>true</bool>
+                 </property>
+                 <property name="placeholderText">
+                  <string>导入或编辑后在此显示兼容 ST 的预设 JSON...</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+        <layout class="QHBoxLayout" name="bottomButtonLayout">
+         <item>
+            <spacer name="bottomButtonSpacer">
+             <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+             </property>
+            </spacer>
+         </item>
+         <item>
+            <widget class="QPushButton" name="cancelButton">
+             <property name="text">
+                <string>取消</string>
+             </property>
+            </widget>
+         </item>
+         <item>
+            <widget class="QPushButton" name="savePresetButton">
+             <property name="text">
+                <string>保存并应用</string>
+             </property>
+            </widget>
+         </item>
+        </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
