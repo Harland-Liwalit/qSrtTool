@@ -858,11 +858,14 @@ QSplitter::handle {
                  </item>
                  <item>
                   <widget class="QSpinBox" name="characterIdSpinBox">
+                                     <property name="enabled">
+                                        <bool>false</bool>
+                                     </property>
                    <property name="maximum">
                     <number>999999999</number>
                    </property>
                    <property name="value">
-                    <number>100000</number>
+                                        <number>100001</number>
                    </property>
                   </widget>
                  </item>

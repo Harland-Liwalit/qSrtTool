@@ -10,14 +10,37 @@
 #include <QHeaderView>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLayout>
+#include <QList>
 #include <QMessageBox>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QTableWidgetItem>
 
 namespace {
+constexpr int kFixedCharacterId = 100001;
+
 QString defaultPromptIdentifier(int index)
 {
     return QString("prompt_%1").arg(index + 1);
+}
+
+QString promptDisplayName(const QJsonArray &prompts, const QString &identifier)
+{
+    const QString trimmedIdentifier = identifier.trimmed();
+    if (trimmedIdentifier.isEmpty()) {
+        return QString();
+    }
+
+    for (const QJsonValue &value : prompts) {
+        const QJsonObject prompt = value.toObject();
+        if (prompt.value("identifier").toString().trimmed() == trimmedIdentifier) {
+            const QString name = prompt.value("name").toString().trimmed();
+            return name.isEmpty() ? trimmedIdentifier : name;
+        }
+    }
+
+    return trimmedIdentifier;
 }
 }
 
@@ -59,9 +82,26 @@ void PromptEditing::setupUiBehavior()
 {
     ui->chatSourceComboBox->setEditable(true);
 
+    if (ui->topBarFrame) {
+        ui->topBarFrame->setMinimumHeight(64);
+        ui->topBarFrame->setMaximumHeight(84);
+        QSizePolicy topPolicy = ui->topBarFrame->sizePolicy();
+        topPolicy.setVerticalPolicy(QSizePolicy::Fixed);
+        ui->topBarFrame->setSizePolicy(topPolicy);
+    }
+
+    if (ui->mainLayout) {
+        ui->mainLayout->setStretch(0, 0);
+        ui->mainLayout->setStretch(1, 1);
+        ui->mainLayout->setStretch(2, 0);
+    }
+
     if (ui->promptOrderTableWidget) {
-        ui->promptOrderTableWidget->horizontalHeader()->setStretchLastSection(true);
-        ui->promptOrderTableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        ui->promptOrderTableWidget->horizontalHeader()->setStretchLastSection(false);
+        ui->promptOrderTableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+        ui->promptOrderTableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+        ui->promptOrderTableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+        ui->promptOrderTableWidget->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
         ui->promptOrderTableWidget->setAlternatingRowColors(true);
         ui->promptOrderTableWidget->verticalHeader()->setVisible(false);
         ui->promptOrderTableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -74,11 +114,14 @@ void PromptEditing::setupUiBehavior()
     }
 
     if (ui->arrangementSplitter) {
-        ui->arrangementSplitter->setStretchFactor(0, 1);
-        ui->arrangementSplitter->setStretchFactor(1, 1);
+        ui->arrangementSplitter->setStretchFactor(0, 3);
+        ui->arrangementSplitter->setStretchFactor(1, 2);
+        ui->arrangementSplitter->setSizes(QList<int>({680, 420}));
     }
 
     ui->manualOrderSpinBox->setValue(1);
+    ui->characterIdSpinBox->setValue(kFixedCharacterId);
+    ui->characterIdSpinBox->setEnabled(false);
 }
 
 void PromptEditing::setupConnections()
@@ -112,19 +155,6 @@ void PromptEditing::setupConnections()
     connect(ui->promptIdentifierLineEdit, &QLineEdit::textChanged, this, promptFieldChanged);
     connect(ui->promptRoleComboBox, &QComboBox::currentTextChanged, this, promptFieldChanged);
     connect(ui->promptContentTextEdit, &QPlainTextEdit::textChanged, this, promptFieldChanged);
-
-    connect(ui->characterIdSpinBox,
-            static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
-            this,
-            [this](int characterId) {
-                if (m_updatingUi) {
-                    return;
-                }
-                saveOrderTableForCurrentCharacter();
-                m_currentCharacterId = characterId;
-                loadOrderTableForCharacter(characterId);
-                refreshJsonPreview();
-            });
 
     connect(ui->addOrderItemButton, &QPushButton::clicked, this, &PromptEditing::addOrderItem);
     connect(ui->removeOrderItemButton, &QPushButton::clicked, this, &PromptEditing::removeOrderItem);
@@ -220,7 +250,7 @@ QJsonObject PromptEditing::createDefaultPreset() const
     orderArray.append(orderEntry);
 
     QJsonObject promptOrderItem;
-    promptOrderItem.insert("character_id", 100000);
+    promptOrderItem.insert("character_id", kFixedCharacterId);
     promptOrderItem.insert("order", orderArray);
 
     QJsonArray promptOrder;
@@ -328,21 +358,24 @@ void PromptEditing::applyPresetToUi(const QJsonObject &presetObject)
     loadPromptToEditor(0);
 
     m_promptOrderByCharacter.clear();
+    QJsonArray fixedOrderArray;
     const QJsonArray promptOrderArray = presetObject.value("prompt_order").toArray();
     for (const QJsonValue &value : promptOrderArray) {
         const QJsonObject rowObject = value.toObject();
-        const int characterId = rowObject.value("character_id").toInt(100000);
-        m_promptOrderByCharacter.insert(characterId, rowObject.value("order").toArray());
+        const int characterId = rowObject.value("character_id").toInt(kFixedCharacterId);
+        if (characterId == kFixedCharacterId) {
+            fixedOrderArray = rowObject.value("order").toArray();
+            break;
+        }
+        if (fixedOrderArray.isEmpty()) {
+            fixedOrderArray = rowObject.value("order").toArray();
+        }
     }
 
-    if (m_promptOrderByCharacter.isEmpty()) {
-        m_promptOrderByCharacter.insert(100000, QJsonArray());
-    }
-
-    const int firstCharacterId = m_promptOrderByCharacter.firstKey();
-    m_currentCharacterId = firstCharacterId;
-    ui->characterIdSpinBox->setValue(firstCharacterId);
-    loadOrderTableForCharacter(firstCharacterId);
+    m_currentCharacterId = kFixedCharacterId;
+    m_promptOrderByCharacter.insert(kFixedCharacterId, fixedOrderArray);
+    ui->characterIdSpinBox->setValue(kFixedCharacterId);
+    loadOrderTableForCharacter(kFixedCharacterId);
 
     m_updatingUi = false;
 }
@@ -414,6 +447,8 @@ void PromptEditing::commitPromptEditor()
         }
         item->setText(label);
     }
+
+    renumberOrderTable();
 }
 
 void PromptEditing::addPrompt()
@@ -434,6 +469,7 @@ void PromptEditing::addPrompt()
     const int newRow = m_prompts.size() - 1;
     ui->promptListWidget->setCurrentRow(newRow);
     loadPromptToEditor(newRow);
+    renumberOrderTable();
     refreshJsonPreview();
 }
 
@@ -459,6 +495,7 @@ void PromptEditing::removePrompt()
     const int targetRow = qMin(row, m_prompts.size() - 1);
     ui->promptListWidget->setCurrentRow(targetRow);
     loadPromptToEditor(targetRow);
+    renumberOrderTable();
     refreshJsonPreview();
 }
 
@@ -472,15 +509,16 @@ void PromptEditing::loadOrderTableForCharacter(int characterId)
 
 void PromptEditing::saveOrderTableForCurrentCharacter()
 {
-    m_promptOrderByCharacter.insert(m_currentCharacterId, orderTableToJsonArray());
+    m_currentCharacterId = kFixedCharacterId;
+    m_promptOrderByCharacter.insert(kFixedCharacterId, orderTableToJsonArray());
 }
 
 QJsonArray PromptEditing::orderTableToJsonArray() const
 {
     QJsonArray orderArray;
     for (int row = 0; row < ui->promptOrderTableWidget->rowCount(); ++row) {
-        const QTableWidgetItem *identifierItem = ui->promptOrderTableWidget->item(row, 1);
-        const QTableWidgetItem *enabledItem = ui->promptOrderTableWidget->item(row, 2);
+        const QTableWidgetItem *identifierItem = ui->promptOrderTableWidget->item(row, 2);
+        const QTableWidgetItem *enabledItem = ui->promptOrderTableWidget->item(row, 3);
 
         const QString identifier = identifierItem ? identifierItem->text().trimmed() : QString();
         if (identifier.isEmpty()) {
@@ -517,12 +555,17 @@ void PromptEditing::applyOrderJsonArrayToTable(const QJsonArray &orderArray)
 
     for (int row = 0; row < normalizedArray.size(); ++row) {
         const QJsonObject entry = normalizedArray.at(row).toObject();
+        const QString identifier = entry.value("identifier").toString();
+        const QString name = promptDisplayName(m_prompts, identifier);
         ui->promptOrderTableWidget->insertRow(row);
 
         QTableWidgetItem *orderItem = new QTableWidgetItem(QString::number(row + 1));
         orderItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 
-        QTableWidgetItem *identifierItem = new QTableWidgetItem(entry.value("identifier").toString());
+        QTableWidgetItem *nameItem = new QTableWidgetItem(name);
+        nameItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+
+        QTableWidgetItem *identifierItem = new QTableWidgetItem(identifier);
         identifierItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable);
 
         QTableWidgetItem *enabledItem = new QTableWidgetItem();
@@ -530,8 +573,9 @@ void PromptEditing::applyOrderJsonArrayToTable(const QJsonArray &orderArray)
         enabledItem->setCheckState(entry.value("enabled").toBool(true) ? Qt::Checked : Qt::Unchecked);
 
         ui->promptOrderTableWidget->setItem(row, 0, orderItem);
-        ui->promptOrderTableWidget->setItem(row, 1, identifierItem);
-        ui->promptOrderTableWidget->setItem(row, 2, enabledItem);
+        ui->promptOrderTableWidget->setItem(row, 1, nameItem);
+        ui->promptOrderTableWidget->setItem(row, 2, identifierItem);
+        ui->promptOrderTableWidget->setItem(row, 3, enabledItem);
     }
 
     if (ui->promptOrderTableWidget->rowCount() > 0) {
@@ -550,6 +594,16 @@ void PromptEditing::renumberOrderTable()
             ui->promptOrderTableWidget->setItem(row, 0, orderItem);
         }
         orderItem->setText(QString::number(row + 1));
+
+        QTableWidgetItem *identifierItem = ui->promptOrderTableWidget->item(row, 2);
+        QTableWidgetItem *nameItem = ui->promptOrderTableWidget->item(row, 1);
+        if (!nameItem) {
+            nameItem = new QTableWidgetItem();
+            nameItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+            ui->promptOrderTableWidget->setItem(row, 1, nameItem);
+        }
+        const QString identifier = identifierItem ? identifierItem->text().trimmed() : QString();
+        nameItem->setText(promptDisplayName(m_prompts, identifier));
     }
     m_updatingUi = false;
 }
@@ -571,6 +625,9 @@ void PromptEditing::addOrderItem()
     QTableWidgetItem *orderItem = new QTableWidgetItem(QString::number(row + 1));
     orderItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 
+    QTableWidgetItem *nameItem = new QTableWidgetItem(promptDisplayName(m_prompts, identifier));
+    nameItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+
     QTableWidgetItem *identifierItem = new QTableWidgetItem(identifier);
     identifierItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable);
 
@@ -579,8 +636,9 @@ void PromptEditing::addOrderItem()
     enabledItem->setCheckState(Qt::Checked);
 
     ui->promptOrderTableWidget->setItem(row, 0, orderItem);
-    ui->promptOrderTableWidget->setItem(row, 1, identifierItem);
-    ui->promptOrderTableWidget->setItem(row, 2, enabledItem);
+    ui->promptOrderTableWidget->setItem(row, 1, nameItem);
+    ui->promptOrderTableWidget->setItem(row, 2, identifierItem);
+    ui->promptOrderTableWidget->setItem(row, 3, enabledItem);
     ui->promptOrderTableWidget->selectRow(row);
 
     renumberOrderTable();
@@ -623,8 +681,9 @@ void PromptEditing::applyManualOrder()
     }
 
     QTableWidgetItem *orderItem = ui->promptOrderTableWidget->takeItem(currentRow, 0);
-    QTableWidgetItem *identifierItem = ui->promptOrderTableWidget->takeItem(currentRow, 1);
-    QTableWidgetItem *enabledItem = ui->promptOrderTableWidget->takeItem(currentRow, 2);
+    QTableWidgetItem *nameItem = ui->promptOrderTableWidget->takeItem(currentRow, 1);
+    QTableWidgetItem *identifierItem = ui->promptOrderTableWidget->takeItem(currentRow, 2);
+    QTableWidgetItem *enabledItem = ui->promptOrderTableWidget->takeItem(currentRow, 3);
 
     ui->promptOrderTableWidget->removeRow(currentRow);
     if (targetRow > currentRow) {
@@ -633,8 +692,9 @@ void PromptEditing::applyManualOrder()
 
     ui->promptOrderTableWidget->insertRow(targetRow);
     ui->promptOrderTableWidget->setItem(targetRow, 0, orderItem);
-    ui->promptOrderTableWidget->setItem(targetRow, 1, identifierItem);
-    ui->promptOrderTableWidget->setItem(targetRow, 2, enabledItem);
+    ui->promptOrderTableWidget->setItem(targetRow, 1, nameItem);
+    ui->promptOrderTableWidget->setItem(targetRow, 2, identifierItem);
+    ui->promptOrderTableWidget->setItem(targetRow, 3, enabledItem);
     ui->promptOrderTableWidget->selectRow(targetRow);
 
     renumberOrderTable();
@@ -676,12 +736,10 @@ QJsonObject PromptEditing::buildPresetFromUi()
     presetObject.insert("prompts", m_prompts);
 
     QJsonArray promptOrderArray;
-    for (auto it = m_promptOrderByCharacter.constBegin(); it != m_promptOrderByCharacter.constEnd(); ++it) {
-        QJsonObject orderObject;
-        orderObject.insert("character_id", it.key());
-        orderObject.insert("order", it.value());
-        promptOrderArray.append(orderObject);
-    }
+    QJsonObject orderObject;
+    orderObject.insert("character_id", kFixedCharacterId);
+    orderObject.insert("order", m_promptOrderByCharacter.value(kFixedCharacterId));
+    promptOrderArray.append(orderObject);
     presetObject.insert("prompt_order", promptOrderArray);
 
     return presetObject;
