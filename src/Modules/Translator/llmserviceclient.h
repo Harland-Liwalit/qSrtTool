@@ -45,6 +45,7 @@ public:
 signals:
     void modelsReady(const QStringList &models);
     void chatCompleted(const QString &content, const QJsonObject &rawResponse);
+    void streamChunkReceived(const QString &chunk, const QString &aggregatedContent);
     void requestFailed(const QString &stage, const QString &message);
     void busyChanged(bool busy);
 
@@ -66,7 +67,11 @@ private:
 
     QString extractChatContent(const QJsonObject &responseObject) const;
     QStringList extractModelList(const QJsonObject &responseObject) const;
+    QString extractStreamDelta(const QJsonObject &object, bool *done = nullptr) const;
     QString normalizeErrorMessage(QNetworkReply *reply, const QByteArray &responseBody) const;
+
+    void processStreamingPayload(QNetworkReply *reply, const QByteArray &payloadChunk);
+    void consumeStreamingLine(QNetworkReply *reply, const QByteArray &line);
 
     void attachReply(QNetworkReply *reply, ReplyKind kind, int timeoutMs);
     void finalizeReply(QNetworkReply *reply);
@@ -74,6 +79,9 @@ private:
     QNetworkAccessManager *m_networkManager = nullptr;
     QHash<QNetworkReply *, ReplyKind> m_replyKinds;
     QHash<QNetworkReply *, QTimer *> m_replyTimers;
+    QHash<QNetworkReply *, bool> m_replyStreaming;
+    QHash<QNetworkReply *, QByteArray> m_streamBuffers;
+    QHash<QNetworkReply *, QString> m_streamAccumulated;
     int m_activeRequests = 0;
 };
 

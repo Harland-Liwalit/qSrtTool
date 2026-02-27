@@ -22,6 +22,7 @@ SOURCES += \
     src/Core/executablecapabilities.cpp \
     src/Modules/Loader/embeddedffmpegplayer.cpp \
     src/Modules/Translator/llmserviceclient.cpp \
+    src/Modules/Translator/promptrequestcomposer.cpp \
     src/Modules/Translator/promptediting.cpp \
     src/Widgets/logconsole.cpp \
     src/Widgets/pageswitchconfirmdialog.cpp \
@@ -43,6 +44,7 @@ HEADERS += \
     src/Core/executablecapabilities.h \
     src/Modules/Loader/embeddedffmpegplayer.h \
     src/Modules/Translator/llmserviceclient.h \
+    src/Modules/Translator/promptrequestcomposer.h \
     src/Modules/Translator/promptediting.h \
     src/Widgets/logconsole.h \
     src/Widgets/pageswitchconfirmdialog.h \

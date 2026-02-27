@@ -2,9 +2,11 @@
 
 #include <QJsonDocument>
 #include <QJsonValue>
+#include <QIODevice>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QStringList>
 #include <QTimer>
 #include <QUrl>
 
@@ -104,13 +106,9 @@ void LlmServiceClient::requestChatCompletion(const LlmServiceConfig &config,
     const QString endpoint = provider.contains("ollama") ? QStringLiteral("/api/chat")
                                                           : QStringLiteral("/chat/completions");
 
-    if (config.stream) {
-        emit requestFailed(tr("翻译请求"), tr("当前版本暂不支持流式响应，请先关闭“流式传输”"));
-        return;
-    }
-
     const QJsonObject body = buildChatBody(config, messages, options);
-    const QNetworkRequest request = buildRequest(config, endpoint);
+    QNetworkRequest request = buildRequest(config, endpoint);
+    request.setRawHeader("X-QSrtTool-Stream", config.stream ? "1" : "0");
     sendRequest(request,
                 QJsonDocument(body).toJson(QJsonDocument::Compact),
                 ReplyKind::ChatCompletion,
@@ -252,6 +250,64 @@ QStringList LlmServiceClient::extractModelList(const QJsonObject &responseObject
     return models;
 }
 
+QString LlmServiceClient::extractStreamDelta(const QJsonObject &object, bool *done) const
+{
+    if (done) {
+        *done = false;
+    }
+
+    if (object.contains("done") && done) {
+        *done = object.value("done").toBool(false);
+    }
+
+    const QJsonArray choices = object.value("choices").toArray();
+    if (!choices.isEmpty()) {
+        const QJsonObject choiceObject = choices.first().toObject();
+
+        if (choiceObject.value("finish_reason").isString()) {
+            const QString finishReason = choiceObject.value("finish_reason").toString().trimmed();
+            if (!finishReason.isEmpty() && done) {
+                *done = true;
+            }
+        }
+
+        const QJsonObject deltaObject = choiceObject.value("delta").toObject();
+        const QString deltaText = deltaObject.value("content").toString();
+        if (!deltaText.isEmpty()) {
+            return deltaText;
+        }
+
+        const QJsonObject messageObject = choiceObject.value("message").toObject();
+        const QString messageText = messageObject.value("content").toString();
+        if (!messageText.isEmpty()) {
+            return messageText;
+        }
+
+        const QString textFallback = choiceObject.value("text").toString();
+        if (!textFallback.isEmpty()) {
+            return textFallback;
+        }
+    }
+
+    const QJsonObject messageObject = object.value("message").toObject();
+    const QString nestedContent = messageObject.value("content").toString();
+    if (!nestedContent.isEmpty()) {
+        return nestedContent;
+    }
+
+    const QString responseText = object.value("response").toString();
+    if (!responseText.isEmpty()) {
+        return responseText;
+    }
+
+    const QString outputText = object.value("output_text").toString();
+    if (!outputText.isEmpty()) {
+        return outputText;
+    }
+
+    return QString();
+}
+
 QString LlmServiceClient::normalizeErrorMessage(QNetworkReply *reply, const QByteArray &responseBody) const
 {
     if (!reply) {
@@ -288,6 +344,9 @@ void LlmServiceClient::attachReply(QNetworkReply *reply, ReplyKind kind, int tim
     }
 
     m_replyKinds.insert(reply, kind);
+    const bool requestMarkedStreaming = reply->request().hasRawHeader("X-QSrtTool-Stream")
+                                        && reply->request().rawHeader("X-QSrtTool-Stream") == "1";
+    m_replyStreaming.insert(reply, kind == ReplyKind::ChatCompletion && requestMarkedStreaming);
 
     QTimer *timer = new QTimer(reply);
     timer->setSingleShot(true);
@@ -299,11 +358,35 @@ void LlmServiceClient::attachReply(QNetworkReply *reply, ReplyKind kind, int tim
     timer->start(timeoutMs);
     m_replyTimers.insert(reply, timer);
 
+    connect(reply, &QIODevice::readyRead, this, [this, reply]() {
+        if (!m_replyStreaming.value(reply, false)) {
+            return;
+        }
+
+        const QByteArray payloadChunk = reply->readAll();
+        if (!payloadChunk.isEmpty()) {
+            processStreamingPayload(reply, payloadChunk);
+        }
+    });
+
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         const ReplyKind kind = m_replyKinds.value(reply, ReplyKind::ChatCompletion);
+        const bool isStreaming = m_replyStreaming.value(reply, false);
 
         const bool success = (reply->error() == QNetworkReply::NoError);
-        const QByteArray payload = reply->readAll();
+        const QByteArray payload = isStreaming ? QByteArray() : reply->readAll();
+
+        if (isStreaming) {
+            const QByteArray tailChunk = reply->readAll();
+            if (!tailChunk.isEmpty()) {
+                processStreamingPayload(reply, tailChunk);
+            }
+
+            const QByteArray tailBuffer = m_streamBuffers.take(reply);
+            if (!tailBuffer.trimmed().isEmpty()) {
+                consumeStreamingLine(reply, tailBuffer);
+            }
+        }
 
         if (!success) {
             emit requestFailed(kind == ReplyKind::ModelList ? tr("模型列表") : tr("翻译请求"),
@@ -312,34 +395,98 @@ void LlmServiceClient::attachReply(QNetworkReply *reply, ReplyKind kind, int tim
             return;
         }
 
-        QJsonParseError parseError;
-        const QJsonDocument document = QJsonDocument::fromJson(payload, &parseError);
-        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-            emit requestFailed(kind == ReplyKind::ModelList ? tr("模型列表") : tr("翻译请求"),
-                              tr("响应不是有效 JSON：%1").arg(parseError.errorString()));
-            finalizeReply(reply);
-            return;
-        }
+        if (!isStreaming) {
+            QJsonParseError parseError;
+            const QJsonDocument document = QJsonDocument::fromJson(payload, &parseError);
+            if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+                emit requestFailed(kind == ReplyKind::ModelList ? tr("模型列表") : tr("翻译请求"),
+                                  tr("响应不是有效 JSON：%1").arg(parseError.errorString()));
+                finalizeReply(reply);
+                return;
+            }
 
-        const QJsonObject object = document.object();
-        if (kind == ReplyKind::ModelList) {
-            const QStringList models = extractModelList(object);
-            if (models.isEmpty()) {
-                emit requestFailed(tr("模型列表"), tr("未从响应中解析到模型列表"));
+            const QJsonObject object = document.object();
+            if (kind == ReplyKind::ModelList) {
+                const QStringList models = extractModelList(object);
+                if (models.isEmpty()) {
+                    emit requestFailed(tr("模型列表"), tr("未从响应中解析到模型列表"));
+                } else {
+                    emit modelsReady(models);
+                }
             } else {
-                emit modelsReady(models);
+                const QString content = extractChatContent(object);
+                if (content.isEmpty()) {
+                    emit requestFailed(tr("翻译请求"), tr("响应中未找到可用文本内容"));
+                } else {
+                    emit chatCompleted(content, object);
+                }
             }
         } else {
-            const QString content = extractChatContent(object);
-            if (content.isEmpty()) {
-                emit requestFailed(tr("翻译请求"), tr("响应中未找到可用文本内容"));
+            const QString aggregated = m_streamAccumulated.take(reply).trimmed();
+            if (aggregated.isEmpty()) {
+                emit requestFailed(tr("翻译请求"), tr("流式响应结束，但未收到可用文本内容"));
             } else {
-                emit chatCompleted(content, object);
+                emit chatCompleted(aggregated, QJsonObject());
             }
         }
 
         finalizeReply(reply);
     });
+}
+
+void LlmServiceClient::processStreamingPayload(QNetworkReply *reply, const QByteArray &payloadChunk)
+{
+    if (!reply || payloadChunk.isEmpty()) {
+        return;
+    }
+
+    QByteArray &buffer = m_streamBuffers[reply];
+    buffer.append(payloadChunk);
+
+    int newlinePos = buffer.indexOf('\n');
+    while (newlinePos >= 0) {
+        const QByteArray line = buffer.left(newlinePos);
+        buffer.remove(0, newlinePos + 1);
+        consumeStreamingLine(reply, line);
+        newlinePos = buffer.indexOf('\n');
+    }
+}
+
+void LlmServiceClient::consumeStreamingLine(QNetworkReply *reply, const QByteArray &line)
+{
+    if (!reply) {
+        return;
+    }
+
+    QByteArray trimmed = line.trimmed();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+
+    if (trimmed.startsWith("data:")) {
+        trimmed = trimmed.mid(5).trimmed();
+    }
+
+    if (trimmed == "[DONE]") {
+        return;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(trimmed, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        return;
+    }
+
+    bool done = false;
+    const QString delta = extractStreamDelta(document.object(), &done);
+    Q_UNUSED(done)
+    if (delta.isEmpty()) {
+        return;
+    }
+
+    QString &aggregated = m_streamAccumulated[reply];
+    aggregated += delta;
+    emit streamChunkReceived(delta, aggregated);
 }
 
 void LlmServiceClient::finalizeReply(QNetworkReply *reply)
@@ -349,6 +496,9 @@ void LlmServiceClient::finalizeReply(QNetworkReply *reply)
     }
 
     m_replyKinds.remove(reply);
+    m_replyStreaming.remove(reply);
+    m_streamBuffers.remove(reply);
+    m_streamAccumulated.remove(reply);
 
     QTimer *timer = m_replyTimers.take(reply);
     if (timer) {
