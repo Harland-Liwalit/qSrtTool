@@ -180,6 +180,7 @@ private:
     QLabel *m_videoSurface = nullptr;           ///< 视频画面显示标签
     QPushButton *m_rewindButton = nullptr;      ///< 快退按钮
     QPushButton *m_playPauseButton = nullptr;   ///< 播放/暂停按钮
+    QPushButton *m_stopButton = nullptr;        ///< 停止按钮
     QPushButton *m_forwardButton = nullptr;     ///< 快进按钮
     QLabel *m_volumeIcon = nullptr;             ///< 音量图标
     QSlider *m_volumeSlider = nullptr;          ///< 音量调节滑块

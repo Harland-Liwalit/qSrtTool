@@ -7,10 +7,12 @@
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPixmap>
 #include <QProcess>
 #include <QPushButton>
@@ -22,6 +24,64 @@
 
 namespace {
 constexpr int kSliderMax = 1000;  ///< 进度条滑块的最大值
+constexpr double kButtonIconZoom = 1.22;
+const QString kPlayIcon = QStringLiteral(":/new/prefix1/style/loader/play.png");
+const QString kPauseIcon = QStringLiteral(":/new/prefix1/style/loader/pause.png");
+const QString kRewindIcon = QStringLiteral(":/new/prefix1/style/loader/rewind.png");
+const QString kForwardIcon = QStringLiteral(":/new/prefix1/style/loader/fast forward.png");
+const QString kStopIcon = QStringLiteral(":/new/prefix1/style/loader/stop.png");
+const QString kVolumeIcon = QStringLiteral(":/new/prefix1/style/loader/volume.png");
+
+void setButtonIcon(QPushButton *button, const QString &iconPath)
+{
+    if (!button) {
+        return;
+    }
+
+    const QSize iconTargetSize = button->size().isValid() ? button->size() : button->minimumSize();
+    button->setText(QString());
+
+    QPixmap source(iconPath);
+    if (!source.isNull() && iconTargetSize.width() > 0 && iconTargetSize.height() > 0) {
+        QPixmap rounded(iconTargetSize);
+        rounded.fill(Qt::transparent);
+
+        QPainter painter(&rounded);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        QPainterPath clipPath;
+        clipPath.addEllipse(QRectF(0, 0, iconTargetSize.width(), iconTargetSize.height()));
+        painter.setClipPath(clipPath);
+
+        const QSize zoomedSize(
+            qMax(1, static_cast<int>(iconTargetSize.width() * kButtonIconZoom)),
+            qMax(1, static_cast<int>(iconTargetSize.height() * kButtonIconZoom))
+        );
+        const QPixmap scaled = source.scaled(zoomedSize,
+                                            Qt::KeepAspectRatioByExpanding,
+                                            Qt::SmoothTransformation);
+        const int offsetX = (iconTargetSize.width() - scaled.width()) / 2;
+        const int offsetY = (iconTargetSize.height() - scaled.height()) / 2;
+        painter.drawPixmap(offsetX, offsetY, scaled);
+
+        button->setIcon(QIcon(rounded));
+        button->setIconSize(iconTargetSize);
+        return;
+    }
+
+    button->setIcon(QIcon(iconPath));
+    button->setIconSize(iconTargetSize);
+}
+
+void setVolumeIcon(QLabel *label, const QString &iconPath)
+{
+    if (!label) {
+        return;
+    }
+    const QPixmap pix(iconPath);
+    label->setText(QString());
+    label->setPixmap(pix.scaled(16, 16, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
 }
 
 /// @brief 构造函数 - 初始化播放器UI和信号连接
@@ -57,10 +117,11 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     controlsLayout->setContentsMargins(8, 0, 8, 6);
     controlsLayout->setSpacing(10);
 
-    m_rewindButton = new QPushButton(QStringLiteral("⏪"), this);
-    m_playPauseButton = new QPushButton(QStringLiteral("▶"), this);
-    m_forwardButton = new QPushButton(QStringLiteral("⏩"), this);
-    m_volumeIcon = new QLabel(QStringLiteral("🔊"), this);
+    m_rewindButton = new QPushButton(this);
+    m_playPauseButton = new QPushButton(this);
+    m_stopButton = new QPushButton(this);
+    m_forwardButton = new QPushButton(this);
+    m_volumeIcon = new QLabel(this);
     m_volumeSlider = new QSlider(Qt::Horizontal, this);
     m_progressSlider = new QSlider(Qt::Horizontal, this);
     m_timeLabel = new QLabel(tr("00:00 / 00:00"), this);
@@ -71,25 +132,49 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     m_volumeSlider->setValue(m_volumePercent);
     m_volumeSlider->setFixedWidth(120);
     m_volumeSlider->setToolTip(tr("音量"));
+    m_timeLabel->setAlignment(Qt::AlignCenter);
+    m_timeLabel->setMinimumWidth(128);
+    m_timeLabel->setStyleSheet(
+        QStringLiteral("QLabel { color: #f5f8fc; background: rgba(20, 28, 40, 210); border: 1px solid #8ea4ba; border-radius: 8px; padding: 2px 8px; font-size: 13px; font-weight: 600; }")
+    );
 
-    m_playPauseButton->setMinimumSize(56, 42);
-    m_rewindButton->setMinimumSize(44, 34);
-    m_forwardButton->setMinimumSize(44, 34);
-    m_volumeIcon->setMinimumWidth(20);
+    m_playPauseButton->setFixedSize(42, 42);
+    m_rewindButton->setFixedSize(36, 36);
+    m_stopButton->setFixedSize(36, 36);
+    m_forwardButton->setFixedSize(36, 36);
+    m_volumeIcon->setMinimumWidth(22);
     m_volumeIcon->setAlignment(Qt::AlignCenter);
+    m_rewindButton->setFlat(true);
+    m_playPauseButton->setFlat(true);
+    m_stopButton->setFlat(true);
+    m_forwardButton->setFlat(true);
 
-    const QString barStyle = QStringLiteral(
-        "QPushButton { border: 1px solid #95a7bb; border-radius: 16px; background: #dce6f2; }"
-        "QPushButton:pressed { background: #c4d3e4; }"
+    const int rewindRadius = m_rewindButton->width() / 2;
+    const int playRadius = m_playPauseButton->width() / 2;
+    const int stopRadius = m_stopButton->width() / 2;
+    const int forwardRadius = m_forwardButton->width() / 2;
+
+    setButtonIcon(m_rewindButton, kRewindIcon);
+    setButtonIcon(m_playPauseButton, kPlayIcon);
+    setButtonIcon(m_stopButton, kStopIcon);
+    setButtonIcon(m_forwardButton, kForwardIcon);
+    setVolumeIcon(m_volumeIcon, kVolumeIcon);
+
+    const QString buttonStyle = QStringLiteral(
+        "QPushButton { border: none; background: transparent; padding: 0px; margin: 0px; }"
+        "QPushButton:pressed { border: none; background: transparent; }"
+    );
+    const QString sliderStyle = QStringLiteral(
         "QSlider::groove:horizontal { border: 1px solid #9fb2c7; height: 6px; background: #d9e2ec; border-radius: 3px; }"
         "QSlider::sub-page:horizontal { background: #7ca3d1; border-radius: 3px; }"
         "QSlider::handle:horizontal { width: 14px; margin: -5px 0; border-radius: 7px; background: #f4f8fc; border: 1px solid #8ea4ba; }"
     );
-    m_rewindButton->setStyleSheet(barStyle);
-    m_playPauseButton->setStyleSheet(barStyle);
-    m_forwardButton->setStyleSheet(barStyle);
-    m_progressSlider->setStyleSheet(barStyle);
-    m_volumeSlider->setStyleSheet(barStyle);
+    m_rewindButton->setStyleSheet(buttonStyle + QString("QPushButton { border-radius: %1px; }").arg(rewindRadius));
+    m_playPauseButton->setStyleSheet(buttonStyle + QString("QPushButton { border-radius: %1px; }").arg(playRadius));
+    m_stopButton->setStyleSheet(buttonStyle + QString("QPushButton { border-radius: %1px; }").arg(stopRadius));
+    m_forwardButton->setStyleSheet(buttonStyle + QString("QPushButton { border-radius: %1px; }").arg(forwardRadius));
+    m_progressSlider->setStyleSheet(sliderStyle);
+    m_volumeSlider->setStyleSheet(sliderStyle);
 
     progressLayout->addWidget(m_progressSlider, 1);
     progressLayout->addWidget(m_timeLabel);
@@ -97,6 +182,7 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     controlsLayout->addStretch();
     controlsLayout->addWidget(m_rewindButton);
     controlsLayout->addWidget(m_playPauseButton);
+    controlsLayout->addWidget(m_stopButton);
     controlsLayout->addWidget(m_forwardButton);
     controlsLayout->addSpacing(8);
     controlsLayout->addWidget(m_volumeIcon);
@@ -125,6 +211,19 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
 
     connect(m_playPauseButton, &QPushButton::clicked, this, &EmbeddedFfmpegPlayer::playPause);
     connect(m_rewindButton, &QPushButton::clicked, this, &EmbeddedFfmpegPlayer::seekBackward);
+    connect(m_stopButton, &QPushButton::clicked, this, [this]() {
+        const bool wasPlaying = m_isPlaying;
+        stopPlayback();
+        m_isPlaying = false;
+        m_positionMs = 0;
+        m_startPositionMs = 0;
+        m_decodedFrameCount = 0;
+        setButtonIcon(m_playPauseButton, kPlayIcon);
+        updateProgressUi();
+        if (wasPlaying || !m_currentFilePath.isEmpty()) {
+            emit statusMessage(tr("已停止"));
+        }
+    });
     connect(m_forwardButton, &QPushButton::clicked, this, &EmbeddedFfmpegPlayer::seekForward);
     connect(m_progressSlider, &QSlider::sliderPressed, this, &EmbeddedFfmpegPlayer::onSliderPressed);
     connect(m_progressSlider, &QSlider::sliderReleased, this, &EmbeddedFfmpegPlayer::onSliderReleased);
@@ -166,17 +265,13 @@ bool EmbeddedFfmpegPlayer::loadVideo(const QString &filePath)
     }
 
     stopPlayback();
-    destroyAudioProcess();
-    destroyDecoderProcess();
-    setupAudioProcess();
-    setupDecoderProcess();
 
     m_currentFilePath = QFileInfo(filePath).absoluteFilePath();
     m_positionMs = 0;
     m_startPositionMs = 0;
     m_decodedFrameCount = 0;
     m_isPlaying = false;
-    m_playPauseButton->setText(QStringLiteral("▶"));
+    setButtonIcon(m_playPauseButton, kPlayIcon);
     clearFrameBuffer();
     m_audioBuffer.clear();
     m_videoSurface->setPixmap(QPixmap());
@@ -236,7 +331,7 @@ void EmbeddedFfmpegPlayer::playPause()
     m_positionMs = m_startPositionMs + m_playbackClock.elapsed();
     stopPlayback();
     m_isPlaying = false;
-    m_playPauseButton->setText(QStringLiteral("▶"));
+    setButtonIcon(m_playPauseButton, kPlayIcon);
     updateProgressUi();
     emit statusMessage(tr("已暂停"));
 }
@@ -251,9 +346,9 @@ void EmbeddedFfmpegPlayer::stopPlayback()
         const bool previouslyBlocked = m_ffmpegProcess->blockSignals(true);
         m_userStopping = true;
         m_ffmpegProcess->terminate();
-        if (!m_ffmpegProcess->waitForFinished(800)) {
+        if (!m_ffmpegProcess->waitForFinished(80)) {
             m_ffmpegProcess->kill();
-            m_ffmpegProcess->waitForFinished(1500);
+            m_ffmpegProcess->waitForFinished(80);
         }
         m_userStopping = false;
         m_ffmpegProcess->blockSignals(previouslyBlocked);
@@ -266,9 +361,9 @@ void EmbeddedFfmpegPlayer::stopPlayback()
     if (m_audioProcess && m_audioProcess->state() != QProcess::NotRunning) {
         const bool previouslyBlocked = m_audioProcess->blockSignals(true);
         m_audioProcess->terminate();
-        if (!m_audioProcess->waitForFinished(800)) {
+        if (!m_audioProcess->waitForFinished(80)) {
             m_audioProcess->kill();
-            m_audioProcess->waitForFinished(1500);
+            m_audioProcess->waitForFinished(80);
         }
         m_audioProcess->blockSignals(previouslyBlocked);
     }
@@ -311,7 +406,17 @@ bool EmbeddedFfmpegPlayer::eventFilter(QObject *watched, QEvent *event)
     }
 
     if (watched == m_videoSurface && event->type() == QEvent::MouseButtonPress) {
+        const auto *mouseEvent = static_cast<QMouseEvent *>(event);
         m_videoSurface->setFocus();
+
+        if (mouseEvent
+            && mouseEvent->button() == Qt::LeftButton
+            && !m_currentFilePath.isEmpty()) {
+            playPause();
+            return true;
+        }
+
+        return false;
     }
 
     // 点击进度条时仅设置滑块位置，实际跳转由QSlider正常的按下/释放流程触发
@@ -381,7 +486,7 @@ void EmbeddedFfmpegPlayer::onProcessFinished(int exitCode, QProcess::ExitStatus 
     const bool stoppedByUser = m_userStopping;
     m_isPlaying = false;
     m_progressTimer->stop();
-    m_playPauseButton->setText(QStringLiteral("▶"));
+    setButtonIcon(m_playPauseButton, kPlayIcon);
 
     if (stoppedByUser) {
         updateProgressUi();
@@ -428,7 +533,7 @@ void EmbeddedFfmpegPlayer::onSliderPressed()
         m_positionMs = m_startPositionMs + m_playbackClock.elapsed();
         stopPlayback();
         m_isPlaying = false;
-        m_playPauseButton->setText(QStringLiteral("▶"));
+        setButtonIcon(m_playPauseButton, kPlayIcon);
     }
 }
 
@@ -542,15 +647,7 @@ void EmbeddedFfmpegPlayer::onVolumeChanged(int value)
         return;
     }
 
-    if (m_volumePercent == 0) {
-        m_volumeIcon->setText(QStringLiteral("🔇"));
-    } else if (m_volumePercent <= 35) {
-        m_volumeIcon->setText(QStringLiteral("🔈"));
-    } else if (m_volumePercent <= 70) {
-        m_volumeIcon->setText(QStringLiteral("🔉"));
-    } else {
-        m_volumeIcon->setText(QStringLiteral("🔊"));
-    }
+    setVolumeIcon(m_volumeIcon, kVolumeIcon);
 }
 
 void EmbeddedFfmpegPlayer::onAudioProcessFinished(int, QProcess::ExitStatus)
@@ -663,7 +760,7 @@ bool EmbeddedFfmpegPlayer::startPlaybackAt(qint64 positionMs)
     m_ffmpegProcess->blockSignals(false);
     m_ffmpegProcess->start();
 
-    if (!m_ffmpegProcess->waitForStarted(3000)) {
+    if (!m_ffmpegProcess->waitForStarted(100)) {
         return false;
     }
 
@@ -687,9 +784,9 @@ bool EmbeddedFfmpegPlayer::startAudioPlaybackAt(qint64 positionMs)
 
     if (m_audioProcess->state() != QProcess::NotRunning) {
         m_audioProcess->terminate();
-        if (!m_audioProcess->waitForFinished(500)) {
+        if (!m_audioProcess->waitForFinished(80)) {
             m_audioProcess->kill();
-            m_audioProcess->waitForFinished(1000);
+            m_audioProcess->waitForFinished(80);
         }
     }
 
@@ -713,7 +810,7 @@ bool EmbeddedFfmpegPlayer::startAudioPlaybackAt(qint64 positionMs)
     m_audioProcess->blockSignals(false);
     m_audioProcess->start();
 
-    return m_audioProcess->waitForStarted(3000);
+    return m_audioProcess->waitForStarted(100);
 }
 
 void EmbeddedFfmpegPlayer::seekTo(qint64 positionMs)
@@ -749,7 +846,7 @@ bool EmbeddedFfmpegPlayer::beginPlaybackFromCurrentPosition()
     }
 
     m_isPlaying = true;
-    m_playPauseButton->setText(QStringLiteral("⏸"));
+    setButtonIcon(m_playPauseButton, kPauseIcon);
     m_progressTimer->start();
     m_playbackClock.restart();
     m_startPositionMs = m_positionMs;
@@ -768,7 +865,8 @@ void EmbeddedFfmpegPlayer::refreshVideoMeta()
         return;
     }
 
-    QProcess probe;
+    auto *probe = new QProcess(this);
+    const QString targetFilePath = m_currentFilePath;
     QStringList args;
     args << "-v" << "error"
          << "-select_streams" << "v:0"
@@ -776,44 +874,58 @@ void EmbeddedFfmpegPlayer::refreshVideoMeta()
          << "-of" << "default=noprint_wrappers=1"
          << m_currentFilePath;
 
-    probe.start(ffprobePath, args);
-    if (!probe.waitForFinished(4000)) {
-        return;
-    }
+    connect(probe, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, probe, targetFilePath](int, QProcess::ExitStatus) {
+        const QString output = QString::fromLocal8Bit(probe->readAllStandardOutput());
+        probe->deleteLater();
 
-    const QString output = QString::fromLocal8Bit(probe.readAllStandardOutput());
+        if (targetFilePath != m_currentFilePath) {
+            return;
+        }
 
-    QRegularExpression widthRe("width=(\\d+)");
-    QRegularExpression heightRe("height=(\\d+)");
-    QRegularExpression fpsRe("avg_frame_rate=(\\d+)/(\\d+)");
-    QRegularExpression durationRe("duration=([0-9]+(?:\\.[0-9]+)?)");
+        QRegularExpression widthRe("width=(\\d+)");
+        QRegularExpression heightRe("height=(\\d+)");
+        QRegularExpression fpsRe("avg_frame_rate=(\\d+)/(\\d+)");
+        QRegularExpression durationRe("duration=([0-9]+(?:\\.[0-9]+)?)");
 
-    const auto widthMatch = widthRe.match(output);
-    const auto heightMatch = heightRe.match(output);
-    const auto fpsMatch = fpsRe.match(output);
-    const auto durationMatch = durationRe.match(output);
+        const auto widthMatch = widthRe.match(output);
+        const auto heightMatch = heightRe.match(output);
+        const auto fpsMatch = fpsRe.match(output);
+        const auto durationMatch = durationRe.match(output);
 
-    m_srcVideoWidth = widthMatch.hasMatch() ? widthMatch.captured(1).toInt() : 0;
-    m_srcVideoHeight = heightMatch.hasMatch() ? heightMatch.captured(1).toInt() : 0;
+        m_srcVideoWidth = widthMatch.hasMatch() ? widthMatch.captured(1).toInt() : 0;
+        m_srcVideoHeight = heightMatch.hasMatch() ? heightMatch.captured(1).toInt() : 0;
 
-    if (fpsMatch.hasMatch()) {
-        const double num = fpsMatch.captured(1).toDouble();
-        const double den = fpsMatch.captured(2).toDouble();
-        if (den > 0.0) {
-            const double fps = num / den;
-            if (fps > 1.0 && fps < 240.0) {
-                m_srcFps = fps;
+        if (fpsMatch.hasMatch()) {
+            const double num = fpsMatch.captured(1).toDouble();
+            const double den = fpsMatch.captured(2).toDouble();
+            if (den > 0.0) {
+                const double fps = num / den;
+                if (fps > 1.0 && fps < 240.0) {
+                    m_srcFps = fps;
+                }
             }
         }
-    }
 
-    if (durationMatch.hasMatch()) {
-        bool ok = false;
-        const double seconds = durationMatch.captured(1).toDouble(&ok);
-        if (ok && seconds > 0) {
-            m_durationMs = static_cast<qint64>(seconds * 1000.0);
+        if (durationMatch.hasMatch()) {
+            bool ok = false;
+            const double seconds = durationMatch.captured(1).toDouble(&ok);
+            if (ok && seconds > 0) {
+                m_durationMs = static_cast<qint64>(seconds * 1000.0);
+            }
         }
-    }
+
+        updateProgressUi();
+    });
+
+    connect(probe, &QProcess::errorOccurred, this, [probe](QProcess::ProcessError) {
+        probe->deleteLater();
+    });
+
+    probe->setProgram(ffprobePath);
+    probe->setArguments(args);
+    probe->setProcessChannelMode(QProcess::SeparateChannels);
+    probe->start();
 }
 
 void EmbeddedFfmpegPlayer::updateProgressUi()

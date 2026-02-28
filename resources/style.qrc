@@ -9,6 +9,12 @@
         <file>style/MaterialDark.qss</file>
         <file>style/NeonButtons.qss</file>
         <file>style/Ubuntu.qss</file>
+        <file>style/loader/fast forward.png</file>
+        <file>style/loader/pause.png</file>
+        <file>style/loader/play.png</file>
+        <file>style/loader/rewind.png</file>
+        <file>style/loader/stop.png</file>
+        <file>style/loader/volume.png</file>
         <file>style/QSS_IMG/go-down-symbolic.symbolic.png</file>
         <file>style/QSS_IMG/go-next-symbolic.symbolic.png</file>
         <file>style/QSS_IMG/go-previous-symbolic.symbolic.png</file>

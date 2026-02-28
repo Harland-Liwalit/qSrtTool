@@ -11,10 +11,29 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
+#include <QSettings>
+#include <QFileInfo>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QVBoxLayout>
 
 #include "../../Core/dependencymanager.h"
+
+namespace {
+QString loaderLastImportDirKey()
+{
+    return QStringLiteral("loader/lastImportDir");
+}
+
+QString defaultImportDir()
+{
+    const QString moviesDir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+    if (!moviesDir.isEmpty()) {
+        return moviesDir;
+    }
+    return QDir::homePath();
+}
+}
 
 /// @brief VideoLoader构造函数 - 初始化视频导入界面
 /// 
@@ -175,16 +194,26 @@ bool VideoLoader::eventFilter(QObject *watched, QEvent *event)
 void VideoLoader::onImportVideoClicked()
 {
     emit statusMessage(tr("正在选择视频..."));
+
+    QSettings settings(QStringLiteral("qSrtTool"), QStringLiteral("qSrtTool"));
+    QString initialDir = settings.value(loaderLastImportDirKey()).toString().trimmed();
+    if (initialDir.isEmpty() || !QDir(initialDir).exists()) {
+        initialDir = defaultImportDir();
+    }
+
     const QString filePath = QFileDialog::getOpenFileName(
         this,
         tr("选择视频文件"),
-        QString(),
+        initialDir,
         tr("视频文件 (*.mp4 *.mkv *.avi *.mov *.wmv *.flv *.webm *.m4v);;所有文件 (*.*)"));
 
     if (filePath.isEmpty()) {
         emit statusMessage(tr("未选择视频"));
         return;
     }
+
+    settings.setValue(loaderLastImportDirKey(), QFileInfo(filePath).absolutePath());
+    settings.sync();
 
     loadVideo(filePath);
 }
