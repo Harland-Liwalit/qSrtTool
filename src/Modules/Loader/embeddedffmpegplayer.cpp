@@ -82,6 +82,18 @@ void setVolumeIcon(QLabel *label, const QString &iconPath)
     label->setText(QString());
     label->setPixmap(pix.scaled(16, 16, Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
+
+QString escapeSubtitlesFilterPath(const QString &path)
+{
+    QString normalized = QFileInfo(path).absoluteFilePath();
+    normalized.replace("\\", "/");
+    normalized.replace(":", "\\:");
+    normalized.replace("'", "\\\\'");
+    normalized.replace("[", "\\[");
+    normalized.replace("]", "\\]");
+    normalized.replace(",", "\\,");
+    return normalized;
+}
 }
 
 /// @brief 构造函数 - 初始化播放器UI和信号连接
@@ -195,6 +207,16 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     m_progressTimer = new QTimer(this);
     m_progressTimer->setInterval(150);
 
+    m_controlAutoHideTimer = new QTimer(this);
+    m_controlAutoHideTimer->setSingleShot(true);
+    m_controlAutoHideTimer->setInterval(3000);
+    connect(m_controlAutoHideTimer, &QTimer::timeout, this, [this]() {
+        if (!m_controlAutoHideEnabled) {
+            return;
+        }
+        setPlaybackControlsVisible(false);
+    });
+
     QAudioFormat audioFormat;
     audioFormat.setSampleRate(48000);
     audioFormat.setChannelCount(2);
@@ -233,6 +255,26 @@ EmbeddedFfmpegPlayer::EmbeddedFfmpegPlayer(QWidget *parent)
     connect(m_progressTimer, &QTimer::timeout, this, &EmbeddedFfmpegPlayer::onProgressTick);
 
     m_progressSlider->installEventFilter(this);
+    this->installEventFilter(this);
+    m_videoSurface->installEventFilter(this);
+    m_rewindButton->installEventFilter(this);
+    m_playPauseButton->installEventFilter(this);
+    m_stopButton->installEventFilter(this);
+    m_forwardButton->installEventFilter(this);
+    m_progressSlider->installEventFilter(this);
+    m_volumeSlider->installEventFilter(this);
+    m_timeLabel->installEventFilter(this);
+
+    setMouseTracking(true);
+    m_videoSurface->setMouseTracking(true);
+    m_rewindButton->setMouseTracking(true);
+    m_playPauseButton->setMouseTracking(true);
+    m_stopButton->setMouseTracking(true);
+    m_forwardButton->setMouseTracking(true);
+    m_progressSlider->setMouseTracking(true);
+    m_volumeSlider->setMouseTracking(true);
+    m_timeLabel->setMouseTracking(true);
+
     setFocusPolicy(Qt::StrongFocus);
 }
 
@@ -296,6 +338,36 @@ QString EmbeddedFfmpegPlayer::currentFilePath() const
 bool EmbeddedFfmpegPlayer::isPlaying() const
 {
     return m_isPlaying;
+}
+
+void EmbeddedFfmpegPlayer::setExternalSubtitlePath(const QString &subtitlePath)
+{
+    const QString trimmedPath = subtitlePath.trimmed();
+    if (trimmedPath.isEmpty()) {
+        m_externalSubtitlePath.clear();
+        return;
+    }
+
+    const QFileInfo subtitleInfo(trimmedPath);
+    if (!subtitleInfo.exists() || !subtitleInfo.isFile()) {
+        m_externalSubtitlePath.clear();
+        return;
+    }
+
+    m_externalSubtitlePath = subtitleInfo.absoluteFilePath();
+}
+
+void EmbeddedFfmpegPlayer::setControlAutoHideEnabled(bool enabled)
+{
+    m_controlAutoHideEnabled = enabled;
+    if (!enabled) {
+        if (m_controlAutoHideTimer) {
+            m_controlAutoHideTimer->stop();
+        }
+        setPlaybackControlsVisible(true);
+        return;
+    }
+    restartControlAutoHideTimer();
 }
 
 /// @brief 播放/暂停切换
@@ -403,6 +475,17 @@ bool EmbeddedFfmpegPlayer::eventFilter(QObject *watched, QEvent *event)
 {
     if (!event) {
         return QWidget::eventFilter(watched, event);
+    }
+
+    if (m_controlAutoHideEnabled) {
+        const QEvent::Type eventType = event->type();
+        if (eventType == QEvent::Enter ||
+            eventType == QEvent::MouseMove ||
+            eventType == QEvent::MouseButtonPress ||
+            eventType == QEvent::Wheel) {
+            setPlaybackControlsVisible(true);
+            restartControlAutoHideTimer();
+        }
     }
 
     if (watched == m_videoSurface && event->type() == QEvent::MouseButtonPress) {
@@ -740,9 +823,15 @@ bool EmbeddedFfmpegPlayer::startPlaybackAt(qint64 positionMs)
     clearFrameBuffer();
 
     const qint64 safePositionMs = qMax<qint64>(0, positionMs);
-    const QString vf = QString("scale=%1:%2:force_original_aspect_ratio=decrease,pad=%1:%2:(ow-iw)/2:(oh-ih)/2:black")
-                           .arg(m_outputWidth)
-                           .arg(m_outputHeight);
+    const QString scalePadFilter = QString("scale=%1:%2:force_original_aspect_ratio=decrease,pad=%1:%2:(ow-iw)/2:(oh-ih)/2:black")
+                                      .arg(m_outputWidth)
+                                      .arg(m_outputHeight);
+
+    QString vf = scalePadFilter;
+    if (!m_externalSubtitlePath.isEmpty() && QFileInfo::exists(m_externalSubtitlePath)) {
+        vf = QString("subtitles='%1',%2")
+                 .arg(escapeSubtitlesFilterPath(m_externalSubtitlePath), scalePadFilter);
+    }
 
     QStringList args;
     args << "-hide_banner" << "-loglevel" << "error";
@@ -850,7 +939,45 @@ bool EmbeddedFfmpegPlayer::beginPlaybackFromCurrentPosition()
     m_progressTimer->start();
     m_playbackClock.restart();
     m_startPositionMs = m_positionMs;
+    restartControlAutoHideTimer();
     return true;
+}
+
+void EmbeddedFfmpegPlayer::setPlaybackControlsVisible(bool visible)
+{
+    if (m_rewindButton) {
+        m_rewindButton->setVisible(visible);
+    }
+    if (m_playPauseButton) {
+        m_playPauseButton->setVisible(visible);
+    }
+    if (m_stopButton) {
+        m_stopButton->setVisible(visible);
+    }
+    if (m_forwardButton) {
+        m_forwardButton->setVisible(visible);
+    }
+    if (m_volumeIcon) {
+        m_volumeIcon->setVisible(visible);
+    }
+    if (m_volumeSlider) {
+        m_volumeSlider->setVisible(visible);
+    }
+    if (m_progressSlider) {
+        m_progressSlider->setVisible(visible);
+    }
+    if (m_timeLabel) {
+        m_timeLabel->setVisible(visible);
+    }
+}
+
+void EmbeddedFfmpegPlayer::restartControlAutoHideTimer()
+{
+    if (!m_controlAutoHideEnabled || !m_controlAutoHideTimer) {
+        return;
+    }
+
+    m_controlAutoHideTimer->start();
 }
 
 void EmbeddedFfmpegPlayer::refreshVideoMeta()

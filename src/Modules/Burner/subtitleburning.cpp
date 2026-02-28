@@ -90,6 +90,7 @@ void SubtitleBurning::setupBurnWorkflowUi()
         // 复用 Loader 模块的嵌入式播放器，避免在 Burner 中重复维护解码与渲染逻辑。
         m_previewPlayer = new EmbeddedFfmpegPlayer(ui->previewFrame);
         m_previewPlayer->setMinimumHeight(220);
+        m_previewPlayer->setControlAutoHideEnabled(true);
         ui->previewLayout->addWidget(m_previewPlayer);
 
         if (ui->previewLabel) {
@@ -133,6 +134,7 @@ void SubtitleBurning::setupBurnWorkflowUi()
         saveLastVideoImportDirectory(selectedPath);
 
         if (m_previewPlayer) {
+            m_previewPlayer->setExternalSubtitlePath(m_externalSubtitlePath);
             if (m_previewPlayer->loadVideo(selectedPath)) {
                 m_previewPlayer->playPause();
             }
@@ -160,6 +162,19 @@ void SubtitleBurning::setupBurnWorkflowUi()
 
         m_externalSubtitlePath = selectedPath;
         saveLastSubtitleImportDirectory(selectedPath);
+
+        if (m_previewPlayer) {
+            const bool wasPlaying = m_previewPlayer->isPlaying();
+            const bool hasVideoLoaded = !m_previewPlayer->currentFilePath().isEmpty();
+
+            m_previewPlayer->setExternalSubtitlePath(selectedPath);
+
+            if (hasVideoLoaded && wasPlaying) {
+                m_previewPlayer->stopPlayback();
+                m_previewPlayer->playPause();
+            }
+        }
+
         appendLogLine(tr("已导入字幕：%1").arg(selectedPath));
     });
 

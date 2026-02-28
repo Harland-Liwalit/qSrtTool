@@ -43,6 +43,14 @@ public:
     /// @return 正在播放返回true，否则false
     bool isPlaying() const;
 
+    /// @brief 设置外部字幕文件路径（用于预览播放时叠加显示）
+    /// @param subtitlePath 字幕文件绝对路径，传空字符串可清除字幕
+    void setExternalSubtitlePath(const QString &subtitlePath);
+
+    /// @brief 开启/关闭播放控件自动隐藏
+    /// @param enabled true=开启（3秒无鼠标活动自动隐藏） false=关闭
+    void setControlAutoHideEnabled(bool enabled);
+
 public slots:
     /// @brief 播放/暂停切换
     /// @details 如果当前未播放则开始从当前位置播放；如果正在播放则暂停
@@ -176,6 +184,12 @@ private:
     /// @brief 清空帧缓冲区
     void clearFrameBuffer();
 
+    /// @brief 设置控件显隐状态
+    void setPlaybackControlsVisible(bool visible);
+
+    /// @brief 重置自动隐藏计时
+    void restartControlAutoHideTimer();
+
     // UI控件指针
     QLabel *m_videoSurface = nullptr;           ///< 视频画面显示标签
     QPushButton *m_rewindButton = nullptr;      ///< 快退按钮
@@ -199,6 +213,7 @@ private:
 
     // 视频信息
     QString m_currentFilePath;                  ///< 当前加载的视频文件路径
+    QString m_externalSubtitlePath;             ///< 当前预览使用的外部字幕路径
     QString m_cachedFfmpegPath;                 ///< 缓存的ffmpeg.exe路径
     int m_srcVideoWidth = 0;                    ///< 原始视频宽度
     int m_srcVideoHeight = 0;                   ///< 原始视频高度
@@ -216,6 +231,8 @@ private:
     bool m_isPlaying = false;                   ///< 是否正在播放
     bool m_userStopping = false;                ///< 用户主动停止标志
     bool m_wasPlayingBeforeScrub = false;       ///< 拖动进度条前是否在播放
+    bool m_controlAutoHideEnabled = false;      ///< 是否启用控件自动隐藏
+    QTimer *m_controlAutoHideTimer = nullptr;   ///< 自动隐藏计时器
 };
 
 #endif // EMBEDDEDFFMPEGPLAYER_H
