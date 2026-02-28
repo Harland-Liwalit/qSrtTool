@@ -133,5 +133,5 @@ nmake
 
 ## 许可
 
-当前仓库未看到明确开源许可证文件（如 `LICENSE`）。
-如需公开发布到 GitHub，建议先补充许可证声明。
+- 本项目源码采用 **GNU General Public License v3.0**（见 `LICENSE`）。
+- 第三方组件许可证与下载来源见 `THIRD_PARTY_NOTICES.md`。
