@@ -25,15 +25,25 @@ QStringList VideoDownloadCommandBuilder::buildArguments(const VideoDownloadReque
     args << "--newline"
          << "--no-color"
          << "--progress"
+         << "--no-playlist"
          << "-P" << QDir::toNativeSeparators(outputDir)
          << "-o" << "%(title).120s [%(id)s].%(ext)s";
+
+    if (!request.cookieFilePath.trimmed().isEmpty()) {
+        args << "--cookies" << QDir::toNativeSeparators(request.cookieFilePath.trimmed());
+    }
 
     const QString normalizedFormatId = request.formatId.trimmed().toLower();
     const QString normalizedQualityId = request.qualityId.trimmed().toLower();
 
-    if (normalizedFormatId == QStringLiteral("audio_mp3")) {
+    if (normalizedFormatId == QStringLiteral("audio_mp3")
+        || normalizedFormatId == QStringLiteral("audio_m4a")
+        || normalizedFormatId == QStringLiteral("audio_wav")) {
         args << "-x"
-             << "--audio-format" << "mp3"
+             << "--audio-format"
+             << (normalizedFormatId == QStringLiteral("audio_m4a") ? "m4a"
+                 : normalizedFormatId == QStringLiteral("audio_wav") ? "wav"
+                                                                      : "mp3")
              << "--audio-quality" << "0";
     } else {
         const QString formatSelector = videoFormatSelector(normalizedQualityId);
@@ -52,6 +62,14 @@ QStringList VideoDownloadCommandBuilder::buildArguments(const VideoDownloadReque
 
 QString VideoDownloadCommandBuilder::videoFormatSelector(const QString &qualityId)
 {
+    if (qualityId == QStringLiteral("2160p")) {
+        return QStringLiteral("bv*[height<=2160]+ba/b[height<=2160]");
+    }
+
+    if (qualityId == QStringLiteral("1440p")) {
+        return QStringLiteral("bv*[height<=1440]+ba/b[height<=1440]");
+    }
+
     if (qualityId == QStringLiteral("1080p")) {
         return QStringLiteral("bv*[height<=1080]+ba/b[height<=1080]");
     }
@@ -62,6 +80,10 @@ QString VideoDownloadCommandBuilder::videoFormatSelector(const QString &qualityI
 
     if (qualityId == QStringLiteral("480p")) {
         return QStringLiteral("bv*[height<=480]+ba/b[height<=480]");
+    }
+
+    if (qualityId == QStringLiteral("360p")) {
+        return QStringLiteral("bv*[height<=360]+ba/b[height<=360]");
     }
 
     return QStringLiteral("bv*+ba/b");

@@ -12,6 +12,7 @@ struct VideoDownloadRequest
     QString outputDirectory;
     QString formatId;
     QString qualityId;
+    QString cookieFilePath;
 };
 
 /// @brief yt-dlp 命令构建器

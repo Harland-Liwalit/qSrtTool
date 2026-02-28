@@ -9,8 +9,14 @@
 #include <QFileDialog>
 #include <QFile>
 #include <QFileInfo>
+#include <QGridLayout>
 #include <QHeaderView>
+#include <QHBoxLayout>
+#include <QInputDialog>
+#include <QLabel>
 #include <QMessageBox>
+#include <QRegularExpression>
+#include <QScrollBar>
 #include <QTimer>
 #include <QTreeWidgetItem>
 #include <QTransform>
@@ -25,6 +31,8 @@ constexpr int RoleFormatId = Qt::UserRole + 3;
 constexpr int RoleQualityId = Qt::UserRole + 4;
 constexpr int RoleOutputDir = Qt::UserRole + 5;
 constexpr int RoleLocalFilePath = Qt::UserRole + 6;
+constexpr int RoleCookiePath = Qt::UserRole + 7;
+constexpr int RoleCookieTemp = Qt::UserRole + 8;
 
 const char *StatusPending = "pending";
 const char *StatusRunning = "running";
@@ -165,6 +173,29 @@ void VideoDownloader::setupDownloadUi()
         ui->outputLineEdit->setText(defaultOutputDir());
     }
 
+    if (ui->formatComboBox) {
+        ui->formatComboBox->clear();
+        ui->formatComboBox->addItem(QStringLiteral("自动最佳（推荐）"), QStringLiteral("best"));
+        ui->formatComboBox->addItem(QStringLiteral("MP4（H.264 兼容）"), QStringLiteral("mp4"));
+        ui->formatComboBox->addItem(QStringLiteral("MKV（高兼容封装）"), QStringLiteral("mkv"));
+        ui->formatComboBox->addItem(QStringLiteral("仅音频 MP3"), QStringLiteral("audio_mp3"));
+        ui->formatComboBox->addItem(QStringLiteral("仅音频 M4A"), QStringLiteral("audio_m4a"));
+        ui->formatComboBox->addItem(QStringLiteral("仅音频 WAV"), QStringLiteral("audio_wav"));
+    }
+
+    if (ui->qualityComboBox) {
+        ui->qualityComboBox->clear();
+        ui->qualityComboBox->addItem(QStringLiteral("最佳"), QStringLiteral("best"));
+        ui->qualityComboBox->addItem(QStringLiteral("2160p"), QStringLiteral("2160p"));
+        ui->qualityComboBox->addItem(QStringLiteral("1440p"), QStringLiteral("1440p"));
+        ui->qualityComboBox->addItem(QStringLiteral("1080p"), QStringLiteral("1080p"));
+        ui->qualityComboBox->addItem(QStringLiteral("720p"), QStringLiteral("720p"));
+        ui->qualityComboBox->addItem(QStringLiteral("480p"), QStringLiteral("480p"));
+        ui->qualityComboBox->addItem(QStringLiteral("360p"), QStringLiteral("360p"));
+    }
+
+    setupCookieUi();
+
     if (ui->cancelButton) {
         ui->cancelButton->setEnabled(false);
     }
@@ -243,12 +274,140 @@ void VideoDownloader::setupDownloadUi()
             }
         }
 
+        cleanupItemTempCookie(item);
+
         delete ui->downloadsTree->takeTopLevelItem(row);
         appendLog(QStringLiteral("已删除队列任务。"));
         refreshActionButtons();
     });
 
     refreshActionButtons();
+}
+
+void VideoDownloader::setupCookieUi()
+{
+    if (!ui || !ui->optionsGrid || m_cookieModeComboBox) {
+        return;
+    }
+
+    const int cookieRow = ui->optionsGrid->rowCount();
+
+    QLabel *cookieLabel = new QLabel(QStringLiteral("权限 Cookie"), this);
+    ui->optionsGrid->addWidget(cookieLabel, cookieRow, 0);
+
+    QWidget *cookieContainer = new QWidget(this);
+    QHBoxLayout *cookieLayout = new QHBoxLayout(cookieContainer);
+    cookieLayout->setContentsMargins(0, 0, 0, 0);
+    cookieLayout->setSpacing(6);
+
+    m_cookieModeComboBox = new QComboBox(cookieContainer);
+    m_cookieModeComboBox->addItem(QStringLiteral("不使用"), QStringLiteral("none"));
+    m_cookieModeComboBox->addItem(QStringLiteral("Cookie 文件"), QStringLiteral("file"));
+    m_cookieModeComboBox->addItem(QStringLiteral("Cookie 文本"), QStringLiteral("text"));
+
+    m_cookieInputLineEdit = new QLineEdit(cookieContainer);
+    m_cookieBrowseButton = new QPushButton(QStringLiteral("浏览"), cookieContainer);
+    m_cookiePasteButton = new QPushButton(QStringLiteral("粘贴文本"), cookieContainer);
+
+    cookieLayout->addWidget(m_cookieModeComboBox);
+    cookieLayout->addWidget(m_cookieInputLineEdit, 1);
+    cookieLayout->addWidget(m_cookieBrowseButton);
+    cookieLayout->addWidget(m_cookiePasteButton);
+
+    ui->optionsGrid->addWidget(cookieContainer, cookieRow, 1);
+
+    connect(m_cookieModeComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this, [this](int) {
+        updateCookieUiState();
+    });
+
+    connect(m_cookieBrowseButton, &QPushButton::clicked, this, [this]() {
+        if (!m_cookieModeComboBox || !m_cookieInputLineEdit) {
+            return;
+        }
+
+        const QString mode = m_cookieModeComboBox->currentData().toString();
+        if (mode == QStringLiteral("file")) {
+            const QString filePath = QFileDialog::getOpenFileName(
+                this,
+                tr("选择 Cookie 文件"),
+                m_cookieInputLineEdit->text().trimmed(),
+                tr("Cookie 文件 (*.txt *.cookies *.cookie);;所有文件 (*.*)"));
+            if (!filePath.isEmpty()) {
+                m_cookieInputLineEdit->setText(filePath);
+            }
+            return;
+        }
+
+        if (mode == QStringLiteral("text")) {
+            bool ok = false;
+            const QString text = QInputDialog::getMultiLineText(
+                this,
+                tr("编辑 Cookie 文本"),
+                tr("粘贴 Netscape 格式 Cookie 文本："),
+                m_cookieTextBuffer,
+                &ok);
+            if (ok) {
+                m_cookieTextBuffer = text.trimmed();
+                if (m_cookieTextBuffer.isEmpty()) {
+                    m_cookieInputLineEdit->clear();
+                } else {
+                    const int lineCount = m_cookieTextBuffer.split('\n', Qt::SkipEmptyParts).size();
+                    m_cookieInputLineEdit->setText(QStringLiteral("已设置文本 Cookie（%1 行）").arg(lineCount));
+                }
+            }
+            return;
+        }
+
+        m_cookieInputLineEdit->clear();
+        m_cookieTextBuffer.clear();
+    });
+
+    connect(m_cookiePasteButton, &QPushButton::clicked, this, [this]() {
+        if (!m_cookieModeComboBox || !m_cookieInputLineEdit) {
+            return;
+        }
+
+        const QString text = QApplication::clipboard()->text().trimmed();
+        if (text.isEmpty()) {
+            QMessageBox::information(this, tr("剪贴板为空"), tr("未检测到可用 Cookie 文本。"));
+            return;
+        }
+
+        m_cookieModeComboBox->setCurrentIndex(m_cookieModeComboBox->findData(QStringLiteral("text")));
+        m_cookieTextBuffer = text;
+        const int lineCount = m_cookieTextBuffer.split('\n', Qt::SkipEmptyParts).size();
+        m_cookieInputLineEdit->setText(QStringLiteral("已粘贴文本 Cookie（%1 行）").arg(lineCount));
+    });
+
+    updateCookieUiState();
+}
+
+void VideoDownloader::updateCookieUiState()
+{
+    if (!m_cookieModeComboBox || !m_cookieInputLineEdit || !m_cookieBrowseButton || !m_cookiePasteButton) {
+        return;
+    }
+
+    const QString mode = m_cookieModeComboBox->currentData().toString();
+    if (mode == QStringLiteral("file")) {
+        m_cookieInputLineEdit->setPlaceholderText(QStringLiteral("选择 Cookie 文件（Netscape 格式）"));
+        m_cookieInputLineEdit->setReadOnly(false);
+        m_cookieBrowseButton->setText(QStringLiteral("浏览"));
+        m_cookiePasteButton->setEnabled(true);
+    } else if (mode == QStringLiteral("text")) {
+        m_cookieInputLineEdit->setPlaceholderText(QStringLiteral("点击“浏览”可编辑文本，或直接点“粘贴文本”"));
+        m_cookieInputLineEdit->setReadOnly(true);
+        m_cookieBrowseButton->setText(QStringLiteral("编辑"));
+        m_cookiePasteButton->setEnabled(true);
+    } else {
+        m_cookieInputLineEdit->setPlaceholderText(QStringLiteral("无需 Cookie 时保持此模式"));
+        m_cookieInputLineEdit->clear();
+        m_cookieTextBuffer.clear();
+        m_cookieInputLineEdit->setReadOnly(true);
+        m_cookieBrowseButton->setText(QStringLiteral("清空"));
+        m_cookiePasteButton->setEnabled(false);
+    }
 }
 
 void VideoDownloader::updateRunningStateUi(bool running)
@@ -264,7 +423,43 @@ void VideoDownloader::appendLog(const QString &line)
     }
 
     const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
-    ui->logTextEdit->append(QStringLiteral("[%1] %2").arg(timestamp, line));
+    m_logHistory << QStringLiteral("[%1] %2").arg(timestamp, line);
+    renderLogConsole();
+}
+
+void VideoDownloader::renderLogConsole()
+{
+    if (!ui || !ui->logTextEdit) {
+        return;
+    }
+
+    QStringList lines = m_logHistory;
+
+    // 活动任务行始终渲染在底部，效果对齐 Whisper 的“活动行 + 历史行”展示。
+    if (ui->downloadsTree) {
+        const int count = ui->downloadsTree->topLevelItemCount();
+        for (int i = 0; i < count; ++i) {
+            QTreeWidgetItem *item = ui->downloadsTree->topLevelItem(i);
+            if (!item) {
+                continue;
+            }
+
+            VideoDownloadTaskRunner *runner = runnerForItem(item);
+            if (!runner) {
+                continue;
+            }
+
+            const QString activeLine = m_activeTaskLogLines.value(runner).trimmed();
+            if (!activeLine.isEmpty()) {
+                lines << activeLine;
+            }
+        }
+    }
+
+    ui->logTextEdit->setPlainText(lines.join("\n"));
+    if (ui->logTextEdit->verticalScrollBar()) {
+        ui->logTextEdit->verticalScrollBar()->setValue(ui->logTextEdit->verticalScrollBar()->maximum());
+    }
 }
 
 void VideoDownloader::enqueueUrlFromInput(bool fromClipboard)
@@ -286,7 +481,15 @@ void VideoDownloader::enqueueUrlFromInput(bool fromClipboard)
         return;
     }
 
-    QTreeWidgetItem *item = createQueueItem(urlText);
+    QString cookiePath;
+    bool cookieTempFile = false;
+    QString cookieError;
+    if (!resolveCookieSnapshotForQueue(&cookiePath, &cookieTempFile, &cookieError)) {
+        QMessageBox::warning(this, tr("Cookie 配置无效"), cookieError);
+        return;
+    }
+
+    QTreeWidgetItem *item = createQueueItem(urlText, cookiePath, cookieTempFile);
     if (ui->downloadsTree && item) {
         ui->downloadsTree->addTopLevelItem(item);
         ui->downloadsTree->setCurrentItem(item);
@@ -299,7 +502,7 @@ void VideoDownloader::enqueueUrlFromInput(bool fromClipboard)
     }
 }
 
-QTreeWidgetItem *VideoDownloader::createQueueItem(const QString &url)
+QTreeWidgetItem *VideoDownloader::createQueueItem(const QString &url, const QString &cookiePath, bool cookieTempFile)
 {
     if (url.trimmed().isEmpty()) {
         return nullptr;
@@ -317,6 +520,8 @@ QTreeWidgetItem *VideoDownloader::createQueueItem(const QString &url)
     item->setData(0, RoleFormatId, formatIdFromUi());
     item->setData(0, RoleQualityId, qualityIdFromUi());
     item->setData(0, RoleOutputDir, ui && ui->outputLineEdit ? ui->outputLineEdit->text().trimmed() : defaultOutputDir());
+    item->setData(0, RoleCookiePath, cookiePath);
+    item->setData(0, RoleCookieTemp, cookieTempFile);
     return item;
 }
 
@@ -376,6 +581,7 @@ bool VideoDownloader::buildRequestForItem(QTreeWidgetItem *item, QString *errorM
     request.outputDirectory = outputDir;
     request.formatId = item->data(0, RoleFormatId).toString().trimmed();
     request.qualityId = item->data(0, RoleQualityId).toString().trimmed();
+    request.cookieFilePath = item->data(0, RoleCookiePath).toString().trimmed();
 
     if (request.formatId.isEmpty()) {
         request.formatId = QStringLiteral("best");
@@ -403,12 +609,21 @@ bool VideoDownloader::buildRequestForItem(QTreeWidgetItem *item, QString *errorM
         if (!taskItem) {
             return;
         }
+
+        m_runnerProgressPercent[runner] = 0;
+        m_runnerSpeedText[runner] = QStringLiteral("--");
+        refreshActiveTaskLogLine(runner);
+
         setItemStatus(taskItem, QStringLiteral("0%"), QStringLiteral("下载中"));
         appendLog(QStringLiteral("任务已启动：%1").arg(taskItem->data(0, RoleUrl).toString()));
     });
 
-    connect(runner, &VideoDownloadTaskRunner::taskLog, this, [this](const QString &line) {
-        appendLog(line);
+    connect(runner, &VideoDownloadTaskRunner::taskLog, this, [this, runner](const QString &line) {
+        const QString speedText = extractSpeedText(line);
+        if (!speedText.isEmpty()) {
+            m_runnerSpeedText[runner] = speedText;
+            refreshActiveTaskLogLine(runner);
+        }
     });
 
     connect(runner, &VideoDownloadTaskRunner::progressChanged, this, [this, runner](int percent) {
@@ -416,6 +631,9 @@ bool VideoDownloader::buildRequestForItem(QTreeWidgetItem *item, QString *errorM
         if (!taskItem) {
             return;
         }
+
+        m_runnerProgressPercent[runner] = percent;
+        refreshActiveTaskLogLine(runner);
         setItemStatus(taskItem, QStringLiteral("%1%").arg(percent), QStringLiteral("下载中"));
     });
 
@@ -442,6 +660,7 @@ bool VideoDownloader::buildRequestForItem(QTreeWidgetItem *item, QString *errorM
         taskItem->setText(3, resolution.isEmpty() ? QStringLiteral("--") : resolution);
         taskItem->setText(4, duration.isEmpty() ? QStringLiteral("--") : duration);
         taskItem->setText(5, fps.isEmpty() ? QStringLiteral("--") : fps);
+        refreshActiveTaskLogLine(runner);
     });
 
     connect(runner, &VideoDownloadTaskRunner::taskFinished, this,
@@ -459,8 +678,11 @@ bool VideoDownloader::buildRequestForItem(QTreeWidgetItem *item, QString *errorM
                 setItemStatus(taskItem, taskItem->text(1), QStringLiteral("失败"));
                 taskItem->setData(0, RoleStatus, QString::fromLatin1(StatusFailed));
             }
+
+            cleanupItemTempCookie(taskItem);
         }
 
+        clearActiveTaskLogLine(runner);
         appendLog(message);
         runner->deleteLater();
         refreshActionButtons();
@@ -480,17 +702,8 @@ QString VideoDownloader::formatIdFromUi() const
         return QStringLiteral("best");
     }
 
-    const int index = ui->formatComboBox->currentIndex();
-    switch (index) {
-    case 1:
-        return QStringLiteral("mp4");
-    case 2:
-        return QStringLiteral("mkv");
-    case 3:
-        return QStringLiteral("audio_mp3");
-    default:
-        return QStringLiteral("best");
-    }
+    const QString value = ui->formatComboBox->currentData().toString().trimmed();
+    return value.isEmpty() ? QStringLiteral("best") : value;
 }
 
 QString VideoDownloader::qualityIdFromUi() const
@@ -499,22 +712,121 @@ QString VideoDownloader::qualityIdFromUi() const
         return QStringLiteral("best");
     }
 
-    const QString text = ui->qualityComboBox->currentText().trimmed().toLower();
-    if (text.contains(QStringLiteral("1080"))) {
-        return QStringLiteral("1080p");
-    }
-    if (text.contains(QStringLiteral("720"))) {
-        return QStringLiteral("720p");
-    }
-    if (text.contains(QStringLiteral("480"))) {
-        return QStringLiteral("480p");
-    }
-    return QStringLiteral("best");
+    const QString value = ui->qualityComboBox->currentData().toString().trimmed();
+    return value.isEmpty() ? QStringLiteral("best") : value;
 }
 
 QString VideoDownloader::defaultOutputDir() const
 {
     return QDir(QDir::currentPath()).filePath(QStringLiteral("output/downloads"));
+}
+
+bool VideoDownloader::resolveCookieSnapshotForQueue(QString *cookiePath, bool *cookieTempFile, QString *errorMessage)
+{
+    if (cookiePath) {
+        cookiePath->clear();
+    }
+    if (cookieTempFile) {
+        *cookieTempFile = false;
+    }
+
+    if (!m_cookieModeComboBox || !m_cookieInputLineEdit) {
+        return true;
+    }
+
+    const QString mode = m_cookieModeComboBox->currentData().toString();
+    if (mode == QStringLiteral("none")) {
+        return true;
+    }
+
+    if (mode == QStringLiteral("file")) {
+        const QString path = m_cookieInputLineEdit->text().trimmed();
+        if (path.isEmpty() || !QFileInfo::exists(path)) {
+            if (errorMessage) {
+                *errorMessage = QStringLiteral("请选择一个有效的 Cookie 文件。") ;
+            }
+            return false;
+        }
+
+        if (cookiePath) {
+            *cookiePath = path;
+        }
+        return true;
+    }
+
+    if (mode == QStringLiteral("text")) {
+        const QString cookieText = m_cookieTextBuffer.trimmed();
+        if (cookieText.isEmpty()) {
+            if (errorMessage) {
+                *errorMessage = QStringLiteral("Cookie 文本为空，请粘贴或编辑后再入队。") ;
+            }
+            return false;
+        }
+
+        QString writeError;
+        const QString tempFile = createCookieTempFile(cookieText, &writeError);
+        if (tempFile.isEmpty()) {
+            if (errorMessage) {
+                *errorMessage = writeError.isEmpty() ? QStringLiteral("创建临时 Cookie 文件失败。") : writeError;
+            }
+            return false;
+        }
+
+        if (cookiePath) {
+            *cookiePath = tempFile;
+        }
+        if (cookieTempFile) {
+            *cookieTempFile = true;
+        }
+        return true;
+    }
+
+    return true;
+}
+
+QString VideoDownloader::createCookieTempFile(const QString &cookieText, QString *errorMessage) const
+{
+    const QString dirPath = QDir(QDir::currentPath()).filePath(QStringLiteral("temp/yt_cookie"));
+    if (!QDir().mkpath(dirPath)) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("无法创建临时 Cookie 目录。") ;
+        }
+        return QString();
+    }
+
+    const QString filePath = QDir(dirPath).filePath(
+        QStringLiteral("cookie_%1.txt").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_hhmmss_zzz"))));
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("无法写入临时 Cookie 文件。") ;
+        }
+        return QString();
+    }
+
+    file.write(cookieText.toUtf8());
+    file.close();
+    return filePath;
+}
+
+void VideoDownloader::cleanupItemTempCookie(QTreeWidgetItem *item)
+{
+    if (!item) {
+        return;
+    }
+
+    const bool isTemp = item->data(0, RoleCookieTemp).toBool();
+    if (!isTemp) {
+        return;
+    }
+
+    const QString path = item->data(0, RoleCookiePath).toString().trimmed();
+    if (!path.isEmpty() && QFileInfo::exists(path)) {
+        QFile::remove(path);
+    }
+
+    item->setData(0, RoleCookieTemp, false);
 }
 
 void VideoDownloader::setItemStatus(QTreeWidgetItem *item, const QString &progressText, const QString &statusText)
@@ -568,6 +880,7 @@ void VideoDownloader::cancelAllPendingTasks()
         if (item->data(0, RoleStatus).toString() == QString::fromLatin1(StatusPending)) {
             setItemStatus(item, item->text(1), QStringLiteral("已取消"));
             item->setData(0, RoleStatus, QString::fromLatin1(StatusCanceled));
+            cleanupItemTempCookie(item);
         }
     }
 }
@@ -642,4 +955,67 @@ VideoDownloadTaskRunner *VideoDownloader::runnerForItem(QTreeWidgetItem *item) c
     }
 
     return nullptr;
+}
+
+QString VideoDownloader::extractSpeedText(const QString &rawLine) const
+{
+    const QString line = rawLine.trimmed();
+    if (line.isEmpty()) {
+        return QString();
+    }
+
+    static const QRegularExpression speedRegex(QStringLiteral("\\bat\\s+([^\\s]+(?:/s|ps))"),
+                                               QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch match = speedRegex.match(line);
+    if (match.hasMatch()) {
+        return match.captured(1).trimmed();
+    }
+
+    static const QRegularExpression altSpeedRegex(QStringLiteral("([^\\s]+(?:B/s|iB/s|Bps|bps))"),
+                                                  QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch altMatch = altSpeedRegex.match(line);
+    if (altMatch.hasMatch()) {
+        return altMatch.captured(1).trimmed();
+    }
+
+    return QString();
+}
+
+void VideoDownloader::refreshActiveTaskLogLine(VideoDownloadTaskRunner *runner)
+{
+    if (!runner) {
+        return;
+    }
+
+    QTreeWidgetItem *taskItem = m_runningTaskMap.value(runner, nullptr);
+    if (!taskItem) {
+        return;
+    }
+
+    const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
+    const QString fileText = taskItem->text(0).trimmed().isEmpty() ? taskItem->data(0, RoleUrl).toString() : taskItem->text(0).trimmed();
+    const QString progressText = QStringLiteral("%1%").arg(qBound(0, m_runnerProgressPercent.value(runner, 0), 100));
+    const QString speedText = m_runnerSpeedText.value(runner, QStringLiteral("--"));
+    const QString statusText = taskItem->text(2).trimmed().isEmpty() ? QStringLiteral("下载中") : taskItem->text(2).trimmed();
+
+    const QString metaText = QStringLiteral("%1 | %2 | %3fps")
+                                 .arg(taskItem->text(3).trimmed().isEmpty() ? QStringLiteral("--") : taskItem->text(3).trimmed())
+                                 .arg(taskItem->text(4).trimmed().isEmpty() ? QStringLiteral("--") : taskItem->text(4).trimmed())
+                                 .arg(taskItem->text(5).trimmed().isEmpty() ? QStringLiteral("--") : taskItem->text(5).trimmed());
+
+    m_activeTaskLogLines[runner] = QStringLiteral("[%1] %2 | %3 | 速度 %4 | %5 | %6")
+                                       .arg(timestamp, fileText, progressText, speedText, statusText, metaText);
+    renderLogConsole();
+}
+
+void VideoDownloader::clearActiveTaskLogLine(VideoDownloadTaskRunner *runner)
+{
+    if (!runner) {
+        return;
+    }
+
+    m_activeTaskLogLines.remove(runner);
+    m_runnerSpeedText.remove(runner);
+    m_runnerProgressPercent.remove(runner);
+    renderLogConsole();
 }
