@@ -37,6 +37,12 @@ public:
     ~SubtitleTranslation();
 
 private:
+    enum class RetryMode {
+        None,
+        RetryCurrentSegment,
+        RetryPartialRange
+    };
+
     void initializePresetStorage();
     void refreshPresetList(const QString &preferredPath = QString());
     QString selectedPresetPath() const;
@@ -81,6 +87,8 @@ private:
     QVector<SubtitleEntry> mergedTranslatedEntriesByTimestamp() const;
 
     void resetTranslationSessionState();
+    bool refreshActiveRequestContextFromUi();
+    void setRetryButtonState(RetryMode mode, bool enabled);
 
     void importPresetToStorage();
     void openPromptEditingDialog();
@@ -98,6 +106,7 @@ private slots:
     void onBusyChanged(bool busy);
     void onExportSrtClicked();
     void onStopTaskClicked();
+    void onRetryActionClicked();
     void onCopyResultClicked();
     void onClearOutputClicked();
 
@@ -123,6 +132,9 @@ private:
     int m_currentSegment = -1;
     bool m_waitingExportToContinue = false;
     bool m_userStoppedTask = false;
+    bool m_taskCompleted = false;
+    int m_stoppedSegmentIndex = -1;
+    RetryMode m_retryMode = RetryMode::None;
     QString m_currentSegmentRawResponse;
     QString m_currentSegmentCleanPreview;
     QString m_lastFinalMergedSrt;

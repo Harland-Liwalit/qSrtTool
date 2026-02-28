@@ -15,6 +15,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QScrollBar>
@@ -180,6 +181,7 @@ SubtitleTranslation::SubtitleTranslation(QWidget *parent) :
     connect(ui->startTranslateButton, &QPushButton::clicked, this, &SubtitleTranslation::startSegmentedTranslation);
     connect(ui->exportSrtButton, &QPushButton::clicked, this, &SubtitleTranslation::onExportSrtClicked);
     connect(ui->stopTaskButton, &QPushButton::clicked, this, &SubtitleTranslation::onStopTaskClicked);
+    connect(ui->retryActionButton, &QPushButton::clicked, this, &SubtitleTranslation::onRetryActionClicked);
     connect(ui->copyResultButton, &QPushButton::clicked, this, &SubtitleTranslation::onCopyResultClicked);
     connect(ui->clearOutputButton, &QPushButton::clicked, this, &SubtitleTranslation::onClearOutputClicked);
         connect(ui->presetComboBox,
@@ -275,6 +277,7 @@ SubtitleTranslation::SubtitleTranslation(QWidget *parent) :
     applySharedPresetParameters();
     renderOutputPanel();
     ui->stopTaskButton->setEnabled(false);
+    setRetryButtonState(RetryMode::None, false);
 }
 
 SubtitleTranslation::~SubtitleTranslation()
@@ -881,15 +884,77 @@ void SubtitleTranslation::resetTranslationSessionState()
     m_currentSegmentCleanPreview.clear();
     m_lastFinalMergedSrt.clear();
     m_exportTargetPath.clear();
+    m_taskCompleted = false;
+    m_stoppedSegmentIndex = -1;
+    m_retryMode = RetryMode::None;
+    if (ui && ui->retryActionButton) {
+        setRetryButtonState(RetryMode::None, false);
+    }
     m_pendingStreamRawContent.clear();
     if (m_streamPreviewTimer) {
         m_streamPreviewTimer->stop();
     }
 }
 
+bool SubtitleTranslation::refreshActiveRequestContextFromUi()
+{
+    const LlmServiceConfig config = collectServiceConfig();
+    if (!config.isValid() || config.model.isEmpty()) {
+        return false;
+    }
+
+    const QString presetPath = selectedPresetPath();
+    const QJsonObject presetObject = loadPresetObject(presetPath);
+
+    PromptComposeInput composeInput;
+    composeInput.naturalInstruction = buildAutoInstructionText();
+    composeInput.sourceLanguage = ui->sourceLangComboBox->currentText().trimmed();
+    composeInput.targetLanguage = ui->targetLangComboBox->currentText().trimmed();
+    composeInput.keepTimeline = ui->keepTimelineCheckBox->isChecked();
+    composeInput.reviewPolish = ui->reviewCheckBox->isChecked();
+    composeInput.srtPath = ui->srtPathLineEdit->text().trimmed();
+    if (!presetObject.isEmpty()) {
+        composeInput.presetJson = QString::fromUtf8(QJsonDocument(presetObject).toJson(QJsonDocument::Indented));
+    }
+
+    QJsonObject options;
+    options.insert("temperature", ui->temperatureSpinBox->value());
+    options.insert("max_tokens", ui->maxTokensSpinBox->value());
+
+    m_activeConfig = config;
+    m_activeOptions = options;
+    m_activeComposeInput = composeInput;
+    return true;
+}
+
+void SubtitleTranslation::setRetryButtonState(RetryMode mode, bool enabled)
+{
+    m_retryMode = mode;
+    if (!ui || !ui->retryActionButton) {
+        return;
+    }
+
+    switch (mode) {
+    case RetryMode::RetryCurrentSegment:
+        ui->retryActionButton->setText(tr("重译本段"));
+        break;
+    case RetryMode::RetryPartialRange:
+        ui->retryActionButton->setText(tr("部分重译"));
+        break;
+    default:
+        ui->retryActionButton->setText(tr("重译操作"));
+        break;
+    }
+
+    ui->retryActionButton->setEnabled(enabled);
+}
+
 void SubtitleTranslation::startSegmentedTranslation()
 {
     m_userStoppedTask = false;
+    m_taskCompleted = false;
+    m_stoppedSegmentIndex = -1;
+    setRetryButtonState(RetryMode::None, false);
     syncSharedParametersToPreset();
 
     const LlmServiceConfig config = collectServiceConfig();
@@ -1182,6 +1247,9 @@ void SubtitleTranslation::exportFinalMergedSrt()
     ui->progressStatusLabel->setText(tr("全部分段完成，已按时间戳合并导出"));
     ui->translateProgressBar->setRange(0, 100);
     ui->translateProgressBar->setValue(100);
+    m_taskCompleted = true;
+    m_stoppedSegmentIndex = -1;
+    setRetryButtonState(RetryMode::RetryPartialRange, true);
     appendOutputMessage(tr("导出完成：%1（共 %2 条，按时间戳顺序合并）")
                         .arg(m_exportTargetPath)
                         .arg(mergedEntries.size()));
@@ -1238,16 +1306,143 @@ void SubtitleTranslation::onStopTaskClicked()
     if (m_currentSegment >= 0 || m_waitingExportToContinue) {
         m_userStoppedTask = true;
         m_llmClient->cancelAll();
-        resetTranslationSessionState();
+        m_stoppedSegmentIndex = m_currentSegment;
+        m_currentSegment = -1;
+        m_waitingExportToContinue = false;
+        m_taskCompleted = false;
+        setRetryButtonState(RetryMode::RetryCurrentSegment, m_stoppedSegmentIndex >= 0);
         ui->translateProgressBar->setRange(0, 100);
         ui->translateProgressBar->setValue(0);
         ui->progressStatusLabel->setText(tr("任务已手动停止"));
-        appendOutputMessage(tr("已手动停止当前翻译任务，可修改提示词后重新开始。"));
+        appendOutputMessage(tr("已手动停止当前翻译任务，可修改提示词后点击“重译本段”。"));
         onBusyChanged(false);
         return;
     }
 
+    if (m_taskCompleted) {
+        setRetryButtonState(RetryMode::RetryPartialRange, true);
+        appendOutputMessage(tr("当前任务已完成，可点击“部分重译”按时间戳重译。"));
+        return;
+    }
+
     appendOutputMessage(tr("当前没有可停止的任务。"));
+}
+
+void SubtitleTranslation::onRetryActionClicked()
+{
+    if (m_retryMode == RetryMode::RetryCurrentSegment) {
+        if (m_stoppedSegmentIndex < 0 || m_stoppedSegmentIndex >= m_segments.size()) {
+            appendOutputMessage(tr("当前没有可重译的分段。"));
+            return;
+        }
+
+        if (!refreshActiveRequestContextFromUi()) {
+            QMessageBox::warning(this, tr("配置错误"), tr("请先确认服务地址和模型配置"));
+            return;
+        }
+
+        const QVector<SubtitleEntry> entries = m_segments.at(m_stoppedSegmentIndex);
+        for (const SubtitleEntry &entry : entries) {
+            m_translatedByStartMs.remove(entry.startMs);
+        }
+
+        m_userStoppedTask = false;
+        m_currentSegment = m_stoppedSegmentIndex;
+        m_waitingExportToContinue = false;
+        setRetryButtonState(RetryMode::None, false);
+        appendOutputMessage(tr("开始重译第 %1 段（共 %2 条）")
+                            .arg(m_currentSegment + 1)
+                            .arg(entries.size()));
+        sendCurrentSegmentRequest();
+        return;
+    }
+
+    if (m_retryMode == RetryMode::RetryPartialRange) {
+        if (m_sourceEntries.isEmpty() || m_translatedByStartMs.isEmpty()) {
+            appendOutputMessage(tr("当前没有可用于部分重译的数据，请先完成一次完整翻译。"));
+            return;
+        }
+
+        bool okStart = false;
+        const QString defaultStart = msToTimeline(m_sourceEntries.first().startMs);
+        const QString startText = QInputDialog::getText(this,
+                                                        tr("部分重译"),
+                                                        tr("输入起始时间戳（例如 00:10:00,000）"),
+                                                        QLineEdit::Normal,
+                                                        defaultStart,
+                                                        &okStart);
+        if (!okStart || startText.trimmed().isEmpty()) {
+            return;
+        }
+
+        bool okEnd = false;
+        const QString defaultEnd = msToTimeline(m_sourceEntries.last().endMs);
+        const QString endText = QInputDialog::getText(this,
+                                                      tr("部分重译"),
+                                                      tr("输入结束时间戳（例如 00:12:30,000）"),
+                                                      QLineEdit::Normal,
+                                                      defaultEnd,
+                                                      &okEnd);
+        if (!okEnd || endText.trimmed().isEmpty()) {
+            return;
+        }
+
+        const qint64 startMs = timelineToMs(startText);
+        const qint64 endMs = timelineToMs(endText);
+        if (startMs < 0 || endMs < 0 || startMs > endMs) {
+            QMessageBox::warning(this, tr("输入错误"), tr("时间戳格式无效或范围不正确"));
+            return;
+        }
+
+        if (!refreshActiveRequestContextFromUi()) {
+            QMessageBox::warning(this, tr("配置错误"), tr("请先确认服务地址和模型配置"));
+            return;
+        }
+
+        QVector<SubtitleEntry> selected;
+        for (const SubtitleEntry &entry : m_sourceEntries) {
+            const bool overlap = !(entry.endMs < startMs || entry.startMs > endMs);
+            if (!overlap) {
+                continue;
+            }
+            selected.append(entry);
+            m_translatedByStartMs.remove(entry.startMs);
+        }
+
+        if (selected.isEmpty()) {
+            appendOutputMessage(tr("指定时间范围内没有匹配字幕条目。"));
+            return;
+        }
+
+        m_segments.clear();
+        const int chunk = qMax(1, segmentSize());
+        for (int offset = 0; offset < selected.size(); offset += chunk) {
+            const int count = qMin(chunk, selected.size() - offset);
+            QVector<SubtitleEntry> segment;
+            segment.reserve(count);
+            for (int i = 0; i < count; ++i) {
+                segment.append(selected.at(offset + i));
+            }
+            m_segments.append(segment);
+        }
+
+        m_exportTargetPath.clear();
+        m_userStoppedTask = false;
+        m_taskCompleted = false;
+        m_stoppedSegmentIndex = -1;
+        m_currentSegment = 0;
+        m_waitingExportToContinue = false;
+        setRetryButtonState(RetryMode::None, false);
+        appendOutputMessage(tr("部分重译已开始：时间范围 %1 - %2，共 %3 条，分为 %4 段。")
+                            .arg(msToTimeline(startMs))
+                            .arg(msToTimeline(endMs))
+                            .arg(selected.size())
+                            .arg(m_segments.size()));
+        sendCurrentSegmentRequest();
+        return;
+    }
+
+    appendOutputMessage(tr("当前没有可执行的重译操作。"));
 }
 
 void SubtitleTranslation::onCopyResultClicked()
@@ -1365,4 +1560,9 @@ void SubtitleTranslation::onBusyChanged(bool busy)
     ui->startTranslateButton->setEnabled(!busy);
     ui->exportSrtButton->setEnabled(!busy || m_waitingExportToContinue);
     ui->stopTaskButton->setEnabled(busy || m_currentSegment >= 0 || m_waitingExportToContinue);
+    if (busy || m_waitingExportToContinue || m_currentSegment >= 0) {
+        ui->retryActionButton->setEnabled(false);
+    } else if (m_retryMode != RetryMode::None) {
+        ui->retryActionButton->setEnabled(true);
+    }
 }

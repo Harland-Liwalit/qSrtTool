@@ -702,6 +702,13 @@ QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
               </property>
              </widget>
             </item>
+            <item>
+             <widget class="QPushButton" name="retryActionButton">
+              <property name="text">
+               <string>重译操作</string>
+              </property>
+             </widget>
+            </item>
           <item>
            <widget class="QPushButton" name="copyResultButton">
             <property name="text">
