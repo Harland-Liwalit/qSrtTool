@@ -193,6 +193,49 @@ void SubtitleExtraction::setupWorkflowUi()
         }
     });
 
+    if (ui->closeButton) {
+        ui->closeButton->setEnabled(false);
+        connect(ui->closeButton, &QPushButton::clicked, this, [this]() {
+            if (m_lastCompletedOutputFilePath.isEmpty() || !QFileInfo::exists(m_lastCompletedOutputFilePath)) {
+                m_lastCompletedOutputFilePath.clear();
+                ui->closeButton->setEnabled(false);
+                QMessageBox::warning(this, tr("文件不可用"), tr("请先完成一个文件识别，再进入下一步。"));
+                return;
+            }
+            emit requestNextStep(m_lastCompletedOutputFilePath);
+        });
+    }
+
+    if (ui->inputLineEdit) {
+        connect(ui->inputLineEdit, &QLineEdit::textChanged, this, [this](const QString &) {
+            m_lastCompletedOutputFilePath.clear();
+            if (ui->closeButton) {
+                ui->closeButton->setEnabled(false);
+            }
+        });
+    }
+
+    if (ui->outputLineEdit) {
+        connect(ui->outputLineEdit, &QLineEdit::textChanged, this, [this](const QString &) {
+            m_lastCompletedOutputFilePath.clear();
+            if (ui->closeButton) {
+                ui->closeButton->setEnabled(false);
+            }
+        });
+    }
+
+    if (ui->outputFormatComboBox) {
+        connect(ui->outputFormatComboBox,
+                &QComboBox::currentTextChanged,
+                this,
+                [this](const QString &) {
+                    m_lastCompletedOutputFilePath.clear();
+                    if (ui->closeButton) {
+                        ui->closeButton->setEnabled(false);
+                    }
+                });
+    }
+
     connect(ui->transcribeButton, &QPushButton::clicked, this, [this]() {
         if (m_isRunning) {
             requestStopWorkflow();
@@ -385,6 +428,11 @@ void SubtitleExtraction::startTranscriptionWorkflow()
     if (tempRoot.isEmpty() || finalRoot.isEmpty()) {
         QMessageBox::warning(this, tr("目录未设置"), tr("请先设置“中间文件目录”和“最终字幕输出目录”。"));
         return;
+    }
+
+    m_lastCompletedOutputFilePath.clear();
+    if (ui->closeButton) {
+        ui->closeButton->setEnabled(false);
     }
 
     QDir().mkpath(tempRoot);
@@ -646,6 +694,10 @@ void SubtitleExtraction::startTranscriptionWorkflow()
 
     appendWorkflowLog(tr("本次转写总耗时：%1").arg(formatElapsedDuration(workflowTimer.elapsed())));
     appendWorkflowLog(tr("全部完成，字幕已生成"));
+    m_lastCompletedOutputFilePath = outputFilePath;
+    if (ui->closeButton) {
+        ui->closeButton->setEnabled(true);
+    }
     QMessageBox::information(this, tr("识别完成"), tr("字幕文件已输出到：\n%1").arg(outputFilePath));
 }
 

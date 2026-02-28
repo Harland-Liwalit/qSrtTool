@@ -284,6 +284,19 @@ SubtitleTranslation::~SubtitleTranslation()
     delete ui;
 }
 
+void SubtitleTranslation::setPendingSubtitleFile(const QString &subtitlePath)
+{
+    const QString normalizedPath = QFileInfo(subtitlePath).absoluteFilePath();
+    if (normalizedPath.trimmed().isEmpty()) {
+        return;
+    }
+
+    ui->srtPathLineEdit->setText(normalizedPath);
+    persistUiPreferences();
+    ui->progressStatusLabel->setText(tr("已载入待翻译文件"));
+    appendOutputMessage(tr("已接收待翻译文件：%1").arg(normalizedPath));
+}
+
 void SubtitleTranslation::initializePresetStorage()
 {
     m_presetDirectory = presetDirectoryPath();
@@ -730,9 +743,9 @@ void SubtitleTranslation::renderOutputPanel()
 void SubtitleTranslation::importSrtFile()
 {
     const QString path = QFileDialog::getOpenFileName(this,
-                                                      tr("导入 SRT"),
+                                                      tr("导入字幕文件"),
                                                       QDir::homePath(),
-                                                      tr("字幕文件 (*.srt)"));
+                                                      tr("字幕文件 (*.srt *.vtt *.txt);;所有文件 (*.*)"));
     if (path.isEmpty()) {
         return;
     }
@@ -968,20 +981,111 @@ void SubtitleTranslation::startSegmentedTranslation()
 
     const QString srtPath = ui->srtPathLineEdit->text().trimmed();
     if (srtPath.isEmpty() || !QFileInfo::exists(srtPath)) {
-        QMessageBox::warning(this, tr("输入错误"), tr("请先导入有效的 SRT 文件"));
+        QMessageBox::warning(this, tr("输入错误"), tr("请先导入有效的字幕文件（SRT / WebVTT / TXT）"));
         return;
     }
 
     QFile srtFile(srtPath);
     if (!srtFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, tr("读取失败"), tr("无法打开 SRT 文件：%1").arg(srtPath));
+        QMessageBox::warning(this, tr("读取失败"), tr("无法打开字幕文件：%1").arg(srtPath));
         return;
     }
 
     const QString srtContent = QString::fromUtf8(srtFile.readAll());
-    const QVector<SubtitleEntry> sourceEntries = parseSrtEntries(srtContent);
+    const QFileInfo subtitleInfo(srtPath);
+    const QString suffix = subtitleInfo.suffix().toLower();
+
+    const auto parseTimestampedTxtEntries = [this](const QString &text) -> QVector<SubtitleEntry> {
+        QVector<SubtitleEntry> entries;
+        const QStringList lines = text.split(QRegularExpression(QStringLiteral("\\r?\\n")), Qt::SkipEmptyParts);
+        const QRegularExpression timestampedLineRegex(
+            QStringLiteral(R"(^\s*\[(\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{3})\]\s*(.+?)\s*$)"));
+
+        int autoIndex = 1;
+        for (const QString &rawLine : lines) {
+            const QString line = rawLine.trimmed();
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            const QRegularExpressionMatch match = timestampedLineRegex.match(line);
+            if (!match.hasMatch()) {
+                continue;
+            }
+
+            const QString rangeText = match.captured(1).trimmed();
+            const QStringList rangeParts = rangeText.split(QStringLiteral("-->"));
+            if (rangeParts.size() != 2) {
+                continue;
+            }
+
+            SubtitleEntry entry;
+            entry.index = autoIndex++;
+            entry.startText = normalizeTimelineToken(rangeParts.at(0));
+            entry.endText = normalizeTimelineToken(rangeParts.at(1));
+            entry.startMs = timelineToMs(entry.startText);
+            entry.endMs = timelineToMs(entry.endText);
+            entry.text = match.captured(2).trimmed();
+
+            if (entry.startMs < 0 || entry.endMs < 0 || entry.text.isEmpty()) {
+                continue;
+            }
+            entries.append(entry);
+        }
+
+        return entries;
+    };
+
+    const auto parsePlainTextEntries = [this](const QString &text) -> QVector<SubtitleEntry> {
+        QVector<SubtitleEntry> entries;
+        const QStringList lines = text.split(QRegularExpression(QStringLiteral("\\r?\\n")), Qt::SkipEmptyParts);
+        const qint64 defaultDurationMs = 3000;
+        const qint64 gapMs = 80;
+        qint64 cursorMs = 0;
+        int autoIndex = 1;
+
+        for (const QString &rawLine : lines) {
+            const QString line = rawLine.trimmed();
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            SubtitleEntry entry;
+            entry.index = autoIndex++;
+            entry.startMs = cursorMs;
+            entry.endMs = cursorMs + defaultDurationMs;
+            entry.startText = msToTimeline(entry.startMs);
+            entry.endText = msToTimeline(entry.endMs);
+            entry.text = line;
+            entries.append(entry);
+            cursorMs = entry.endMs + gapMs;
+        }
+
+        return entries;
+    };
+
+    QVector<SubtitleEntry> sourceEntries;
+    bool syntheticTimelineUsed = false;
+
+    if (suffix == QStringLiteral("txt")) {
+        sourceEntries = parseTimestampedTxtEntries(srtContent);
+        if (sourceEntries.isEmpty()) {
+            sourceEntries = parsePlainTextEntries(srtContent);
+            syntheticTimelineUsed = !sourceEntries.isEmpty();
+        }
+    } else {
+        sourceEntries = parseSrtEntries(srtContent);
+        if (sourceEntries.isEmpty()) {
+            sourceEntries = parseTimestampedTxtEntries(srtContent);
+        }
+        if (sourceEntries.isEmpty()) {
+            sourceEntries = parsePlainTextEntries(srtContent);
+            syntheticTimelineUsed = !sourceEntries.isEmpty();
+        }
+    }
+
     if (sourceEntries.isEmpty()) {
-        QMessageBox::warning(this, tr("解析失败"), tr("未解析到可用字幕条目，请检查 SRT 格式"));
+        QMessageBox::warning(this, tr("解析失败"), tr("未解析到可用字幕条目，请检查文件格式与内容"));
         return;
     }
 
@@ -1016,6 +1120,9 @@ void SubtitleTranslation::startSegmentedTranslation()
     appendOutputMessage(tr("已解析字幕 %1 条，准备按每次 %2 条进行动态分段翻译")
                         .arg(m_sourceEntries.size())
                         .arg(qMax(1, ui->segmentSizeSpinBox->value())));
+    if (syntheticTimelineUsed) {
+        appendOutputMessage(tr("当前文件为纯文本，已按行自动生成时间轴用于翻译流程。"));
+    }
 
     sendCurrentSegmentRequest();
 }

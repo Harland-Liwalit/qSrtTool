@@ -138,6 +138,28 @@ MainWindow::MainWindow(QWidget *parent)
         syncNavigationSelection(whisperPage);
     });
 
+    connect(whisperPage, &SubtitleExtraction::requestNextStep, this, [this, translatePage](const QString &subtitlePath) {
+        if (!translatePage || !ui || !ui->mainStackedWidget) {
+            return;
+        }
+
+        const QFileInfo subtitleInfo(subtitlePath);
+        if (subtitlePath.trimmed().isEmpty() || !subtitleInfo.exists()) {
+            QMessageBox::warning(this, tr("字幕文件不可用"), tr("未找到识别输出文件，请先完成识别后再进入下一步。"));
+            return;
+        }
+
+        QWidget *currentPage = ui->mainStackedWidget->currentWidget();
+        if (currentPage) {
+            stopAllTasksOnPage(currentPage);
+        }
+
+        translatePage->setPendingSubtitleFile(subtitleInfo.absoluteFilePath());
+        ui->mainStackedWidget->setCurrentWidget(translatePage);
+        syncNavigationSelection(translatePage);
+        setStatusHint(tr("已进入字幕翻译：%1").arg(subtitleInfo.fileName()));
+    });
+
     connect(ui->navDownloadButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
     connect(ui->navWhisperButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);
     connect(ui->navBurnButton, &QToolButton::clicked, this, &MainWindow::triggerDependencyCheckOnce);

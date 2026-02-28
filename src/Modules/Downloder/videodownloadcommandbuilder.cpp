@@ -26,6 +26,8 @@ QStringList VideoDownloadCommandBuilder::buildArguments(const VideoDownloadReque
          << "--no-color"
          << "--progress"
          << "--no-playlist"
+            << "--no-part"
+            << "--no-keep-fragments"
          << "-P" << QDir::toNativeSeparators(outputDir)
          << "-o" << "%(title).120s [%(id)s].%(ext)s";
 

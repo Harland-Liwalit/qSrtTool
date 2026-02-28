@@ -36,6 +36,7 @@ class SubtitleTranslation : public QWidget
 public:
     explicit SubtitleTranslation(QWidget *parent = nullptr);
     ~SubtitleTranslation();
+    void setPendingSubtitleFile(const QString &subtitlePath);
 
 private:
     enum class RetryMode {

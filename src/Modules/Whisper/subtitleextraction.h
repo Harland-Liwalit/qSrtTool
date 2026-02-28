@@ -34,6 +34,7 @@ public:
 signals:
     void statusMessage(const QString &message);
     void progressChanged(int percent);
+    void requestNextStep(const QString &subtitlePath);
 
 private:
     Ui::SubtitleExtraction *ui;
@@ -48,6 +49,7 @@ private:
     QMap<int, int> m_segmentProgress;
     QStringList m_workflowLogHistory;
     QMap<int, QString> m_activeSegmentLogLines;
+    QString m_lastCompletedOutputFilePath;
 
     void setToolsLoading(bool loading);
     void updateToolsSpinner();

@@ -78,6 +78,7 @@ private:
     bool resolveCookieSnapshotForQueue(QString *cookiePath, bool *cookieTempFile, QString *errorMessage);
     QString createCookieTempFile(const QString &cookieText, QString *errorMessage) const;
     void cleanupItemTempCookie(QTreeWidgetItem *item);
+    int cleanupIntermediateFilesForItem(QTreeWidgetItem *item);
 
     /// @brief 更新队列项可视状态
     void setItemStatus(QTreeWidgetItem *item, const QString &progressText, const QString &statusText);

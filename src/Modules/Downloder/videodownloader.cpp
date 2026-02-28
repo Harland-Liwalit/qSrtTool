@@ -679,6 +679,12 @@ bool VideoDownloader::buildRequestForItem(QTreeWidgetItem *item, QString *errorM
                 taskItem->setData(0, RoleStatus, QString::fromLatin1(StatusFailed));
             }
 
+            const int cleanedCount = cleanupIntermediateFilesForItem(taskItem);
+            if (cleanedCount > 0) {
+                appendLog(QStringLiteral("已自动清理 %1 个中间文件。")
+                              .arg(cleanedCount));
+            }
+
             cleanupItemTempCookie(taskItem);
         }
 
@@ -827,6 +833,63 @@ void VideoDownloader::cleanupItemTempCookie(QTreeWidgetItem *item)
     }
 
     item->setData(0, RoleCookieTemp, false);
+}
+
+int VideoDownloader::cleanupIntermediateFilesForItem(QTreeWidgetItem *item)
+{
+    if (!item) {
+        return 0;
+    }
+
+    const QString finalPath = item->data(0, RoleLocalFilePath).toString().trimmed();
+    if (finalPath.isEmpty()) {
+        return 0;
+    }
+
+    const QFileInfo finalInfo(finalPath);
+    const QDir dir = finalInfo.absoluteDir();
+    if (!dir.exists()) {
+        return 0;
+    }
+
+    const QString fileName = finalInfo.fileName();
+    const QString baseName = finalInfo.completeBaseName();
+
+    QStringList nameFilters;
+    nameFilters << (fileName + QStringLiteral(".part*"))
+                << (fileName + QStringLiteral(".ytdl"))
+                << (fileName + QStringLiteral(".temp"))
+                << (fileName + QStringLiteral(".aria2"))
+                << (fileName + QStringLiteral(".part-Frag*"))
+                << (baseName + QStringLiteral(".f*.part*"))
+                << (baseName + QStringLiteral(".f*.m4s"))
+                << (baseName + QStringLiteral(".f*.ts"))
+                << (baseName + QStringLiteral(".f*.mp4"))
+                << (baseName + QStringLiteral(".f*.webm"))
+                << (baseName + QStringLiteral(".f*.m4a"));
+
+    QStringList fileCandidates;
+    for (const QString &pattern : nameFilters) {
+        const QStringList matches = dir.entryList(QStringList() << pattern, QDir::Files | QDir::NoSymLinks);
+        for (const QString &name : matches) {
+            const QString absPath = dir.absoluteFilePath(name);
+            if (absPath.compare(finalPath, Qt::CaseInsensitive) == 0) {
+                continue;
+            }
+            if (!fileCandidates.contains(absPath)) {
+                fileCandidates << absPath;
+            }
+        }
+    }
+
+    int removed = 0;
+    for (const QString &candidatePath : fileCandidates) {
+        if (QFileInfo::exists(candidatePath) && QFile::remove(candidatePath)) {
+            ++removed;
+        }
+    }
+
+    return removed;
 }
 
 void VideoDownloader::setItemStatus(QTreeWidgetItem *item, const QString &progressText, const QString &statusText)
