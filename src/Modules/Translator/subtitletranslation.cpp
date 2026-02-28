@@ -57,11 +57,6 @@ QString uiSettingKey(const QString &field)
     return QStringLiteral("translator/ui/") + field;
 }
 
-int segmentSize()
-{
-    return 200;
-}
-
 QString intermediateOutputDirectory()
 {
     return QDir::currentPath() + "/temp/translator_intermediate";
@@ -204,6 +199,10 @@ SubtitleTranslation::SubtitleTranslation(QWidget *parent) :
             &SubtitleTranslation::onNaturalInstructionChanged);
 
         connect(ui->maxTokensSpinBox,
+            static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
+            this,
+            [this](int) { persistUiPreferences(); });
+        connect(ui->segmentSizeSpinBox,
             static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
             this,
             [this](int) { persistUiPreferences(); });
@@ -591,6 +590,7 @@ void SubtitleTranslation::loadUiPreferences()
 
     ui->temperatureSpinBox->setValue(settings.value(uiSettingKey(QStringLiteral("temperature")), ui->temperatureSpinBox->value()).toDouble());
     ui->maxTokensSpinBox->setValue(settings.value(uiSettingKey(QStringLiteral("max_tokens")), ui->maxTokensSpinBox->value()).toInt());
+    ui->segmentSizeSpinBox->setValue(settings.value(uiSettingKey(QStringLiteral("segment_size")), ui->segmentSizeSpinBox->value()).toInt());
     ui->keepTimelineCheckBox->setChecked(settings.value(uiSettingKey(QStringLiteral("keep_timeline")), ui->keepTimelineCheckBox->isChecked()).toBool());
     ui->reviewCheckBox->setChecked(settings.value(uiSettingKey(QStringLiteral("review_polish")), ui->reviewCheckBox->isChecked()).toBool());
     ui->streamingCheckBox->setChecked(settings.value(uiSettingKey(QStringLiteral("streaming")), ui->streamingCheckBox->isChecked()).toBool());
@@ -623,6 +623,7 @@ void SubtitleTranslation::persistUiPreferences()
     settings.setValue(uiSettingKey(QStringLiteral("instruction")), ui->instructionTextEdit->toPlainText());
     settings.setValue(uiSettingKey(QStringLiteral("temperature")), ui->temperatureSpinBox->value());
     settings.setValue(uiSettingKey(QStringLiteral("max_tokens")), ui->maxTokensSpinBox->value());
+    settings.setValue(uiSettingKey(QStringLiteral("segment_size")), ui->segmentSizeSpinBox->value());
     settings.setValue(uiSettingKey(QStringLiteral("keep_timeline")), ui->keepTimelineCheckBox->isChecked());
     settings.setValue(uiSettingKey(QStringLiteral("review_polish")), ui->reviewCheckBox->isChecked());
     settings.setValue(uiSettingKey(QStringLiteral("streaming")), ui->streamingCheckBox->isChecked());
@@ -876,16 +877,13 @@ QString SubtitleTranslation::cleanSrtPreviewText(const QString &rawText) const
 void SubtitleTranslation::resetTranslationSessionState()
 {
     m_sourceEntries.clear();
-    m_segments.clear();
+    m_runtimeEntries.clear();
     m_translatedByStartMs.clear();
-    m_currentSegment = -1;
-    m_waitingExportToContinue = false;
+    m_flowState.reset();
     m_currentSegmentRawResponse.clear();
     m_currentSegmentCleanPreview.clear();
     m_lastFinalMergedSrt.clear();
     m_exportTargetPath.clear();
-    m_taskCompleted = false;
-    m_stoppedSegmentIndex = -1;
     m_retryMode = RetryMode::None;
     if (ui && ui->retryActionButton) {
         setRetryButtonState(RetryMode::None, false);
@@ -951,9 +949,6 @@ void SubtitleTranslation::setRetryButtonState(RetryMode mode, bool enabled)
 
 void SubtitleTranslation::startSegmentedTranslation()
 {
-    m_userStoppedTask = false;
-    m_taskCompleted = false;
-    m_stoppedSegmentIndex = -1;
     setRetryButtonState(RetryMode::None, false);
     syncSharedParametersToPreset();
 
@@ -1006,39 +1001,37 @@ void SubtitleTranslation::startSegmentedTranslation()
 
     resetTranslationSessionState();
     m_sourceEntries = sourceEntries;
+    m_runtimeEntries = sourceEntries;
     m_activeConfig = config;
     m_activeOptions = options;
     m_activeComposeInput = composeInput;
-
-    const int chunk = qMax(1, segmentSize());
-    for (int offset = 0; offset < m_sourceEntries.size(); offset += chunk) {
-        const int count = qMin(chunk, m_sourceEntries.size() - offset);
-        QVector<SubtitleEntry> segment;
-        segment.reserve(count);
-        for (int i = 0; i < count; ++i) {
-            segment.append(m_sourceEntries.at(offset + i));
-        }
-        m_segments.append(segment);
-    }
-
-    m_currentSegment = 0;
+    m_flowState.begin(m_runtimeEntries.size());
     m_outputLogLines.clear();
     m_outputPreviewText.clear();
     m_outputAutoFollow = true;
-    appendOutputMessage(tr("已解析字幕 %1 条，按每段 %2 条分为 %3 段")
+    appendOutputMessage(tr("已解析字幕 %1 条，准备按每次 %2 条进行动态分段翻译")
                         .arg(m_sourceEntries.size())
-                        .arg(chunk)
-                        .arg(m_segments.size()));
+                        .arg(qMax(1, ui->segmentSizeSpinBox->value())));
 
     sendCurrentSegmentRequest();
 }
 
 QVector<SubtitleTranslation::SubtitleEntry> SubtitleTranslation::currentSegmentSourceEntries() const
 {
-    if (m_currentSegment < 0 || m_currentSegment >= m_segments.size()) {
+    const int startIndex = m_flowState.lastRequestStartIndex();
+    const int requestCount = m_flowState.lastRequestCount();
+    if (startIndex < 0 || requestCount <= 0) {
         return QVector<SubtitleEntry>();
     }
-    return m_segments.at(m_currentSegment);
+
+    const int boundedStartIndex = qBound(0, startIndex, m_runtimeEntries.size());
+    const int count = qMin(requestCount, m_runtimeEntries.size() - boundedStartIndex);
+    QVector<SubtitleEntry> result;
+    result.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        result.append(m_runtimeEntries.at(boundedStartIndex + i));
+    }
+    return result;
 }
 
 QString SubtitleTranslation::buildSegmentPromptSrt(const QVector<SubtitleEntry> &entries) const
@@ -1048,11 +1041,16 @@ QString SubtitleTranslation::buildSegmentPromptSrt(const QVector<SubtitleEntry> 
 
 void SubtitleTranslation::sendCurrentSegmentRequest()
 {
-    if (m_currentSegment < 0 || m_currentSegment >= m_segments.size()) {
+    const int chunk = qMax(1, ui->segmentSizeSpinBox->value());
+    const TranslationFlowState::RequestInfo requestInfo = m_flowState.prepareNextRequest(chunk);
+    if (!requestInfo.valid) {
         return;
     }
 
     const QVector<SubtitleEntry> segmentEntries = currentSegmentSourceEntries();
+    if (segmentEntries.isEmpty()) {
+        return;
+    }
     const QString segmentSrt = buildSegmentPromptSrt(segmentEntries);
 
     QJsonArray messages;
@@ -1064,25 +1062,33 @@ void SubtitleTranslation::sendCurrentSegmentRequest()
                                   + "\n若某条是噪声可省略，但保留其余条目的原时间戳。");
     messages.append(instructionMessage);
 
+    if (!m_flowState.previousSegmentContext().trimmed().isEmpty()) {
+        QJsonObject contextMessage;
+        contextMessage.insert("role", "user");
+        contextMessage.insert("content",
+                              tr("【上一段译文（仅用于保持文风一致，不要重复输出）】\n%1")
+                                  .arg(m_flowState.previousSegmentContext()));
+        messages.append(contextMessage);
+    }
+
     QJsonObject segmentMessage;
     segmentMessage.insert("role", "user");
     segmentMessage.insert("content",
                           tr("【待翻译分段 %1/%2】\n%3")
-                              .arg(m_currentSegment + 1)
-                              .arg(m_segments.size())
+                              .arg(requestInfo.segmentIndex + 1)
+                              .arg(requestInfo.estimatedTotalSegments)
                               .arg(segmentSrt));
     messages.append(segmentMessage);
 
     m_currentSegmentRawResponse.clear();
     m_currentSegmentCleanPreview.clear();
-    m_waitingExportToContinue = false;
 
-    ui->progressStatusLabel->setText(tr("正在翻译第 %1/%2 段...").arg(m_currentSegment + 1).arg(m_segments.size()));
-    const int startProgress = qRound((m_currentSegment * 100.0) / qMax(1, m_segments.size()));
+    ui->progressStatusLabel->setText(tr("正在翻译第 %1/%2 段...").arg(requestInfo.segmentIndex + 1).arg(requestInfo.estimatedTotalSegments));
+    const int startProgress = qRound((requestInfo.startIndex * 100.0) / qMax(1, m_runtimeEntries.size()));
     ui->translateProgressBar->setRange(0, 100);
     ui->translateProgressBar->setValue(startProgress);
     appendOutputMessage(tr("开始发送第 %1 段翻译请求（%2 条）")
-                        .arg(m_currentSegment + 1)
+                        .arg(requestInfo.segmentIndex + 1)
                         .arg(segmentEntries.size()));
     m_llmClient->requestChatCompletion(m_activeConfig, messages, m_activeOptions);
 }
@@ -1135,15 +1141,17 @@ void SubtitleTranslation::applySegmentTranslationResult(const QString &rawRespon
         }
     }
 
-    const int progress = qRound(((m_currentSegment + 1.0) / qMax(1, m_segments.size())) * 100.0);
+    const int finishedCount = qMin(m_runtimeEntries.size(),
+                                   m_flowState.lastRequestStartIndex() + m_flowState.lastRequestCount());
+    const int progress = qRound((finishedCount * 100.0) / qMax(1, m_runtimeEntries.size()));
     ui->translateProgressBar->setRange(0, 100);
     ui->translateProgressBar->setValue(progress);
-    ui->progressStatusLabel->setText(tr("第 %1 段翻译完成，等待导出继续").arg(m_currentSegment + 1));
+    ui->progressStatusLabel->setText(tr("第 %1 段翻译完成，等待导出继续").arg(m_flowState.currentSegment() + 1));
+    m_flowState.markSegmentCompleted(m_currentSegmentCleanPreview);
 
     appendOutputMessage(tr("第 %1 段返回完成：输入 %2 条。已在预览区完整显示清洗后的 API 返回内容；点击“导出 SRT”将生成中间文件并继续下一段。")
-                        .arg(m_currentSegment + 1)
+                        .arg(m_flowState.currentSegment() + 1)
                         .arg(segmentSource.size()));
-    m_waitingExportToContinue = true;
 }
 
 bool SubtitleTranslation::prepareExportTargetPath()
@@ -1172,19 +1180,20 @@ bool SubtitleTranslation::prepareExportTargetPath()
 
 void SubtitleTranslation::writeCurrentSegmentIntermediateFile()
 {
-    if (m_currentSegment < 0) {
+    if (m_flowState.currentSegment() < 0) {
         return;
     }
 
     const QVector<SubtitleEntry> translated = parseSrtEntries(m_currentSegmentCleanPreview);
     if (translated.isEmpty()) {
-        appendOutputMessage(tr("第 %1 段未生成可写入的中间 SRT，跳过中间文件输出").arg(m_currentSegment + 1));
+        appendOutputMessage(tr("第 %1 段未生成可写入的中间 SRT，跳过中间文件输出").arg(m_flowState.currentSegment() + 1));
         return;
     }
 
     const QString dirPath = intermediateOutputDirectory();
     QDir().mkpath(dirPath);
-    const QString fileName = QStringLiteral("segment_%1.srt").arg(m_currentSegment + 1, 3, 10, QChar('0'));
+    const int serial = m_flowState.takeIntermediateSerial();
+    const QString fileName = QStringLiteral("segment_%1.srt").arg(serial, 3, 10, QChar('0'));
     const QString filePath = QDir(dirPath).filePath(fileName);
 
     QFile file(filePath);
@@ -1247,8 +1256,7 @@ void SubtitleTranslation::exportFinalMergedSrt()
     ui->progressStatusLabel->setText(tr("全部分段完成，已按时间戳合并导出"));
     ui->translateProgressBar->setRange(0, 100);
     ui->translateProgressBar->setValue(100);
-    m_taskCompleted = true;
-    m_stoppedSegmentIndex = -1;
+    m_flowState.markTaskCompleted();
     setRetryButtonState(RetryMode::RetryPartialRange, true);
     appendOutputMessage(tr("导出完成：%1（共 %2 条，按时间戳顺序合并）")
                         .arg(m_exportTargetPath)
@@ -1257,7 +1265,7 @@ void SubtitleTranslation::exportFinalMergedSrt()
 
 void SubtitleTranslation::onExportSrtClicked()
 {
-    if (m_currentSegment < 0) {
+    if (m_flowState.currentSegment() < 0) {
         if (!m_lastFinalMergedSrt.trimmed().isEmpty()) {
             exportFinalMergedSrt();
         } else {
@@ -1266,7 +1274,7 @@ void SubtitleTranslation::onExportSrtClicked()
         return;
     }
 
-    if (!m_waitingExportToContinue) {
+    if (!m_flowState.isWaitingExport()) {
         appendOutputMessage(tr("当前分段尚未返回，暂不能导出"));
         return;
     }
@@ -1276,16 +1284,12 @@ void SubtitleTranslation::onExportSrtClicked()
     }
 
     writeCurrentSegmentIntermediateFile();
-    m_waitingExportToContinue = false;
-
-    ++m_currentSegment;
-    if (m_currentSegment < m_segments.size()) {
-        appendOutputMessage(tr("继续发送第 %1 段翻译请求").arg(m_currentSegment + 1));
+    if (m_flowState.advanceAfterExport()) {
+        appendOutputMessage(tr("继续发送第 %1 段翻译请求").arg(m_flowState.currentSegment() + 1));
         sendCurrentSegmentRequest();
         return;
     }
 
-    m_currentSegment = -1;
     exportFinalMergedSrt();
 }
 
@@ -1296,21 +1300,17 @@ void SubtitleTranslation::onStopTaskClicked()
     }
     m_pendingStreamRawContent.clear();
 
-    if (m_currentSegment < 0 && !m_waitingExportToContinue && !ui->startTranslateButton->isEnabled()) {
-        m_userStoppedTask = true;
+    if (!m_flowState.hasRunningOrPendingTask() && !ui->startTranslateButton->isEnabled()) {
+        m_flowState.markStopRequested();
         m_llmClient->cancelAll();
         appendOutputMessage(tr("已请求停止当前任务，正在中止网络请求..."));
         return;
     }
 
-    if (m_currentSegment >= 0 || m_waitingExportToContinue) {
-        m_userStoppedTask = true;
+    if (m_flowState.hasRunningOrPendingTask()) {
+        m_flowState.stopActiveTask();
         m_llmClient->cancelAll();
-        m_stoppedSegmentIndex = m_currentSegment;
-        m_currentSegment = -1;
-        m_waitingExportToContinue = false;
-        m_taskCompleted = false;
-        setRetryButtonState(RetryMode::RetryCurrentSegment, m_stoppedSegmentIndex >= 0);
+        setRetryButtonState(RetryMode::RetryCurrentSegment, m_flowState.hasStoppedRetryPoint());
         ui->translateProgressBar->setRange(0, 100);
         ui->translateProgressBar->setValue(0);
         ui->progressStatusLabel->setText(tr("任务已手动停止"));
@@ -1319,7 +1319,7 @@ void SubtitleTranslation::onStopTaskClicked()
         return;
     }
 
-    if (m_taskCompleted) {
+    if (m_flowState.isTaskCompleted()) {
         setRetryButtonState(RetryMode::RetryPartialRange, true);
         appendOutputMessage(tr("当前任务已完成，可点击“部分重译”按时间戳重译。"));
         return;
@@ -1331,7 +1331,8 @@ void SubtitleTranslation::onStopTaskClicked()
 void SubtitleTranslation::onRetryActionClicked()
 {
     if (m_retryMode == RetryMode::RetryCurrentSegment) {
-        if (m_stoppedSegmentIndex < 0 || m_stoppedSegmentIndex >= m_segments.size()) {
+        const int stoppedEntryIndex = m_flowState.stoppedEntryIndex();
+        if (stoppedEntryIndex < 0 || stoppedEntryIndex >= m_runtimeEntries.size()) {
             appendOutputMessage(tr("当前没有可重译的分段。"));
             return;
         }
@@ -1341,18 +1342,17 @@ void SubtitleTranslation::onRetryActionClicked()
             return;
         }
 
-        const QVector<SubtitleEntry> entries = m_segments.at(m_stoppedSegmentIndex);
-        for (const SubtitleEntry &entry : entries) {
+        const int chunk = qMax(1, ui->segmentSizeSpinBox->value());
+        for (int i = stoppedEntryIndex; i < m_runtimeEntries.size(); ++i) {
+            const SubtitleEntry &entry = m_runtimeEntries.at(i);
             m_translatedByStartMs.remove(entry.startMs);
         }
 
-        m_userStoppedTask = false;
-        m_currentSegment = m_stoppedSegmentIndex;
-        m_waitingExportToContinue = false;
+        m_flowState.restartFromStopped(chunk);
         setRetryButtonState(RetryMode::None, false);
-        appendOutputMessage(tr("开始重译第 %1 段（共 %2 条）")
-                            .arg(m_currentSegment + 1)
-                            .arg(entries.size()));
+        appendOutputMessage(tr("开始重译：从第 %1 条开始，当前每次翻译 %2 条")
+                            .arg(stoppedEntryIndex + 1)
+                            .arg(chunk));
         sendCurrentSegmentRequest();
         return;
     }
@@ -1414,30 +1414,16 @@ void SubtitleTranslation::onRetryActionClicked()
             return;
         }
 
-        m_segments.clear();
-        const int chunk = qMax(1, segmentSize());
-        for (int offset = 0; offset < selected.size(); offset += chunk) {
-            const int count = qMin(chunk, selected.size() - offset);
-            QVector<SubtitleEntry> segment;
-            segment.reserve(count);
-            for (int i = 0; i < count; ++i) {
-                segment.append(selected.at(offset + i));
-            }
-            m_segments.append(segment);
-        }
+        m_runtimeEntries = selected;
 
         m_exportTargetPath.clear();
-        m_userStoppedTask = false;
-        m_taskCompleted = false;
-        m_stoppedSegmentIndex = -1;
-        m_currentSegment = 0;
-        m_waitingExportToContinue = false;
+        m_flowState.restartWithPartialEntries(m_runtimeEntries.size());
         setRetryButtonState(RetryMode::None, false);
-        appendOutputMessage(tr("部分重译已开始：时间范围 %1 - %2，共 %3 条，分为 %4 段。")
+        appendOutputMessage(tr("部分重译已开始：时间范围 %1 - %2，共 %3 条，当前每次翻译 %4 条。")
                             .arg(msToTimeline(startMs))
                             .arg(msToTimeline(endMs))
                             .arg(selected.size())
-                            .arg(m_segments.size()));
+                            .arg(qMax(1, ui->segmentSizeSpinBox->value())));
         sendCurrentSegmentRequest();
         return;
     }
@@ -1511,7 +1497,7 @@ void SubtitleTranslation::onChatCompleted(const QString &content, const QJsonObj
         m_pendingStreamRawContent.clear();
     }
 
-    if (m_currentSegment >= 0) {
+    if (m_flowState.hasRunningOrPendingTask()) {
         applySegmentTranslationResult(content);
         return;
     }
@@ -1526,7 +1512,7 @@ void SubtitleTranslation::onChatCompleted(const QString &content, const QJsonObj
 
 void SubtitleTranslation::onStreamChunkReceived(const QString &, const QString &aggregatedContent)
 {
-    if (m_currentSegment < 0) {
+    if (m_flowState.currentSegment() < 0) {
         return;
     }
 
@@ -1534,20 +1520,21 @@ void SubtitleTranslation::onStreamChunkReceived(const QString &, const QString &
     if (m_streamPreviewTimer && !m_streamPreviewTimer->isActive()) {
         m_streamPreviewTimer->start();
     }
-    ui->progressStatusLabel->setText(tr("第 %1/%2 段流式返回中...").arg(m_currentSegment + 1).arg(m_segments.size()));
+    const int chunk = qMax(1, ui->segmentSizeSpinBox->value());
+    const int estimatedTotalSegments = qMax(m_flowState.currentSegment() + 1,
+                                            (m_runtimeEntries.size() + chunk - 1) / chunk);
+    ui->progressStatusLabel->setText(tr("第 %1/%2 段流式返回中...").arg(m_flowState.currentSegment() + 1).arg(estimatedTotalSegments));
 }
 
 void SubtitleTranslation::onRequestFailed(const QString &stage, const QString &message)
 {
-    if (m_userStoppedTask) {
-        m_userStoppedTask = false;
+    if (m_flowState.consumeStopRequested()) {
         ui->translateProgressBar->setRange(0, 100);
         ui->translateProgressBar->setValue(0);
         ui->progressStatusLabel->setText(tr("任务已手动停止"));
         return;
     }
 
-    m_waitingExportToContinue = false;
     ui->translateProgressBar->setRange(0, 100);
     ui->translateProgressBar->setValue(0);
     ui->progressStatusLabel->setText(tr("%1失败").arg(stage));
@@ -1558,9 +1545,9 @@ void SubtitleTranslation::onBusyChanged(bool busy)
 {
     ui->refreshModelButton->setEnabled(!busy);
     ui->startTranslateButton->setEnabled(!busy);
-    ui->exportSrtButton->setEnabled(!busy || m_waitingExportToContinue);
-    ui->stopTaskButton->setEnabled(busy || m_currentSegment >= 0 || m_waitingExportToContinue);
-    if (busy || m_waitingExportToContinue || m_currentSegment >= 0) {
+    ui->exportSrtButton->setEnabled(!busy || m_flowState.isWaitingExport());
+    ui->stopTaskButton->setEnabled(busy || m_flowState.hasRunningOrPendingTask());
+    if (busy || m_flowState.hasRunningOrPendingTask()) {
         ui->retryActionButton->setEnabled(false);
     } else if (m_retryMode != RetryMode::None) {
         ui->retryActionButton->setEnabled(true);

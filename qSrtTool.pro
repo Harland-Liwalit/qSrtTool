@@ -19,6 +19,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     src/Modules/Translator/apiformatmanager.cpp \
+    src/Modules/Translator/translationflowstate.cpp \
     src/Core/dependencymanager.cpp \
     src/Core/executablecapabilities.cpp \
     src/Modules/Loader/embeddedffmpegplayer.cpp \
@@ -42,6 +43,7 @@ SOURCES += \
 
 HEADERS += \
     src/Modules/Translator/apiformatmanager.h \
+    src/Modules/Translator/translationflowstate.h \
     src/Core/dependencymanager.h \
     src/Core/executablecapabilities.h \
     src/Modules/Loader/embeddedffmpegplayer.h \

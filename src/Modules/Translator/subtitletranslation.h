@@ -3,6 +3,7 @@
 
 #include "llmserviceclient.h"
 #include "promptrequestcomposer.h"
+#include "translationflowstate.h"
 
 #include <QJsonObject>
 #include <QMap>
@@ -126,14 +127,10 @@ private:
     bool m_restoringOutputScroll = false;
 
     QVector<SubtitleEntry> m_sourceEntries;
-    QVector<QVector<SubtitleEntry>> m_segments;
+    QVector<SubtitleEntry> m_runtimeEntries;
     QMap<qint64, SubtitleEntry> m_translatedByStartMs;
 
-    int m_currentSegment = -1;
-    bool m_waitingExportToContinue = false;
-    bool m_userStoppedTask = false;
-    bool m_taskCompleted = false;
-    int m_stoppedSegmentIndex = -1;
+    TranslationFlowState m_flowState;
     RetryMode m_retryMode = RetryMode::None;
     QString m_currentSegmentRawResponse;
     QString m_currentSegmentCleanPreview;

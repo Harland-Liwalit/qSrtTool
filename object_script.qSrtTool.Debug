@@ -1,4 +1,5 @@
 debug/apiformatmanager.o
+debug/translationflowstate.o
 debug/dependencymanager.o
 debug/executablecapabilities.o
 debug/embeddedffmpegplayer.o

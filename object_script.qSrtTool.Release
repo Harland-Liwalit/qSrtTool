@@ -1,4 +1,5 @@
 release/apiformatmanager.o
+release/translationflowstate.o
 release/dependencymanager.o
 release/executablecapabilities.o
 release/embeddedffmpegplayer.o

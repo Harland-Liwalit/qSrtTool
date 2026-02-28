@@ -457,8 +457,11 @@ QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
             <property name="minimumSize">
              <size>
               <width>0</width>
-              <height>96</height>
+              <height>76</height>
              </size>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAsNeeded</enum>
             </property>
             <property name="placeholderText">
              <string>例如：这是一个悬疑电影字幕，请翻译成简体中文，注意保留人物语气和术语一致性……</string>
@@ -517,6 +520,32 @@ QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
             </property>
             <property name="value">
              <number>1024</number>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
+           <widget class="QLabel" name="segmentSizeLabel">
+            <property name="styleSheet">
+             <string notr="true">color: #6E737A;</string>
+            </property>
+            <property name="text">
+             <string>每次翻译条数</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="1">
+           <widget class="QSpinBox" name="segmentSizeSpinBox">
+            <property name="minimum">
+             <number>20</number>
+            </property>
+            <property name="maximum">
+             <number>1000</number>
+            </property>
+            <property name="singleStep">
+             <number>10</number>
+            </property>
+            <property name="value">
+             <number>200</number>
             </property>
            </widget>
           </item>
