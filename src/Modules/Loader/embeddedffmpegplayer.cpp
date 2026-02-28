@@ -823,19 +823,27 @@ bool EmbeddedFfmpegPlayer::startPlaybackAt(qint64 positionMs)
     clearFrameBuffer();
 
     const qint64 safePositionMs = qMax<qint64>(0, positionMs);
+    const QString seekSeconds = QString::number(static_cast<double>(safePositionMs) / 1000.0, 'f', 3);
     const QString scalePadFilter = QString("scale=%1:%2:force_original_aspect_ratio=decrease,pad=%1:%2:(ow-iw)/2:(oh-ih)/2:black")
                                       .arg(m_outputWidth)
                                       .arg(m_outputHeight);
 
+    const bool useSubtitlePreview = !m_externalSubtitlePath.isEmpty() && QFileInfo::exists(m_externalSubtitlePath);
+
     QString vf = scalePadFilter;
-    if (!m_externalSubtitlePath.isEmpty() && QFileInfo::exists(m_externalSubtitlePath)) {
+    if (useSubtitlePreview) {
         vf = QString("subtitles='%1',%2")
-                 .arg(escapeSubtitlesFilterPath(m_externalSubtitlePath), scalePadFilter);
+                 .arg(escapeSubtitlesFilterPath(m_externalSubtitlePath),
+                      scalePadFilter);
     }
 
     QStringList args;
     args << "-hide_banner" << "-loglevel" << "error";
-    args << "-ss" << QString::number(static_cast<double>(safePositionMs) / 1000.0, 'f', 3);
+    args << "-ss" << seekSeconds;
+    if (useSubtitlePreview) {
+        // 保留原始时间轴，避免字幕在 seek 后回到第一句。
+        args << "-copyts";
+    }
     args << "-re" << "-i" << m_currentFilePath;
     args << "-an" << "-sn";
     args << "-vf" << vf;
