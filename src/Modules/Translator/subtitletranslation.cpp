@@ -21,6 +21,7 @@
 #include <QSettings>
 #include <QTextStream>
 #include <QClipboard>
+#include <QTimer>
 
 #include <algorithm>
 
@@ -63,6 +64,11 @@ int segmentSize()
 QString intermediateOutputDirectory()
 {
     return QDir::currentPath() + "/temp/translator_intermediate";
+}
+
+QString finalOutputDirectory()
+{
+    return QDir::currentPath() + "/output/translator_final";
 }
 
 QRegularExpression srtBlockRegex()
@@ -242,6 +248,29 @@ SubtitleTranslation::SubtitleTranslation(QWidget *parent) :
     connect(m_llmClient, &LlmServiceClient::streamChunkReceived, this, &SubtitleTranslation::onStreamChunkReceived);
     connect(m_llmClient, &LlmServiceClient::requestFailed, this, &SubtitleTranslation::onRequestFailed);
     connect(m_llmClient, &LlmServiceClient::busyChanged, this, &SubtitleTranslation::onBusyChanged);
+
+    m_streamPreviewTimer = new QTimer(this);
+    m_streamPreviewTimer->setSingleShot(true);
+    m_streamPreviewTimer->setInterval(120);
+    connect(m_streamPreviewTimer, &QTimer::timeout, this, &SubtitleTranslation::flushPendingStreamPreview);
+
+    if (QScrollBar *outputScrollBar = ui->outputTextEdit->verticalScrollBar()) {
+        connect(outputScrollBar, &QScrollBar::sliderPressed, this, [this]() {
+            m_outputAutoFollow = false;
+        });
+        connect(outputScrollBar, &QScrollBar::sliderReleased, this, [this, outputScrollBar]() {
+            const int maximum = outputScrollBar->maximum();
+            const int value = outputScrollBar->value();
+            m_outputAutoFollow = (maximum - value) <= 2;
+        });
+        connect(outputScrollBar, &QScrollBar::valueChanged, this, [this, outputScrollBar](int value) {
+            if (m_restoringOutputScroll) {
+                return;
+            }
+            const int maximum = outputScrollBar->maximum();
+            m_outputAutoFollow = (maximum - value) <= 2;
+        });
+    }
 
     applySharedPresetParameters();
     renderOutputPanel();
@@ -671,7 +700,7 @@ void SubtitleTranslation::renderOutputPanel()
 {
     QScrollBar *scrollBar = ui->outputTextEdit->verticalScrollBar();
     const int oldValue = scrollBar ? scrollBar->value() : 0;
-    const int oldMaximum = scrollBar ? scrollBar->maximum() : 0;
+    const bool followToBottom = m_outputAutoFollow;
 
     QStringList blocks;
     blocks << QStringLiteral("【输出预览】");
@@ -684,17 +713,14 @@ void SubtitleTranslation::renderOutputPanel()
         blocks << m_outputLogLines;
     }
 
+    m_restoringOutputScroll = true;
     ui->outputTextEdit->setPlainText(blocks.join('\n'));
 
     if (scrollBar) {
-        const int newMaximum = scrollBar->maximum();
-        int targetValue = oldValue;
-        if (oldMaximum > 0) {
-            const double ratio = static_cast<double>(oldValue) / static_cast<double>(oldMaximum);
-            targetValue = qRound(ratio * static_cast<double>(newMaximum));
-        }
-        scrollBar->setValue(qBound(0, targetValue, newMaximum));
+        const int target = followToBottom ? scrollBar->maximum() : qMin(oldValue, scrollBar->maximum());
+        scrollBar->setValue(qBound(0, target, scrollBar->maximum()));
     }
+    m_restoringOutputScroll = false;
 }
 
 void SubtitleTranslation::importSrtFile()
@@ -855,6 +881,10 @@ void SubtitleTranslation::resetTranslationSessionState()
     m_currentSegmentCleanPreview.clear();
     m_lastFinalMergedSrt.clear();
     m_exportTargetPath.clear();
+    m_pendingStreamRawContent.clear();
+    if (m_streamPreviewTimer) {
+        m_streamPreviewTimer->stop();
+    }
 }
 
 void SubtitleTranslation::startSegmentedTranslation()
@@ -929,6 +959,7 @@ void SubtitleTranslation::startSegmentedTranslation()
     m_currentSegment = 0;
     m_outputLogLines.clear();
     m_outputPreviewText.clear();
+    m_outputAutoFollow = true;
     appendOutputMessage(tr("已解析字幕 %1 条，按每段 %2 条分为 %3 段")
                         .arg(m_sourceEntries.size())
                         .arg(chunk)
@@ -982,7 +1013,9 @@ void SubtitleTranslation::sendCurrentSegmentRequest()
     m_waitingExportToContinue = false;
 
     ui->progressStatusLabel->setText(tr("正在翻译第 %1/%2 段...").arg(m_currentSegment + 1).arg(m_segments.size()));
-    ui->translateProgressBar->setRange(0, 0);
+    const int startProgress = qRound((m_currentSegment * 100.0) / qMax(1, m_segments.size()));
+    ui->translateProgressBar->setRange(0, 100);
+    ui->translateProgressBar->setValue(startProgress);
     appendOutputMessage(tr("开始发送第 %1 段翻译请求（%2 条）")
                         .arg(m_currentSegment + 1)
                         .arg(segmentEntries.size()));
@@ -1000,6 +1033,16 @@ void SubtitleTranslation::updateLivePreview(const QString &rawResponse)
     m_currentSegmentCleanPreview = cleaned;
     m_outputPreviewText = cleaned;
     renderOutputPanel();
+}
+
+void SubtitleTranslation::flushPendingStreamPreview()
+{
+    if (m_pendingStreamRawContent.isEmpty()) {
+        return;
+    }
+
+    updateLivePreview(m_pendingStreamRawContent);
+    m_pendingStreamRawContent.clear();
 }
 
 void SubtitleTranslation::applySegmentTranslationResult(const QString &rawResponse)
@@ -1044,15 +1087,21 @@ bool SubtitleTranslation::prepareExportTargetPath()
         return true;
     }
 
-    const QString defaultPath = QDir::homePath() + "/translated_output.srt";
-    const QString selectedPath = QFileDialog::getSaveFileName(this,
-                                                              tr("导出 SRT"),
-                                                              defaultPath,
-                                                              tr("字幕文件 (*.srt)"));
-    if (selectedPath.isEmpty()) {
+    const QString dirPath = finalOutputDirectory();
+    if (!QDir().mkpath(dirPath)) {
+        appendOutputMessage(tr("最终文件目录创建失败：%1").arg(dirPath));
         return false;
     }
-    m_exportTargetPath = selectedPath;
+
+    QString sourceBaseName = QFileInfo(ui->srtPathLineEdit->text().trimmed()).completeBaseName();
+    if (sourceBaseName.isEmpty()) {
+        sourceBaseName = QStringLiteral("translated_output");
+    }
+    sourceBaseName.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+
+    const QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+    m_exportTargetPath = QDir(dirPath).filePath(
+        QStringLiteral("%1_translated_%2.srt").arg(sourceBaseName, timestamp));
     return true;
 }
 
@@ -1174,6 +1223,11 @@ void SubtitleTranslation::onExportSrtClicked()
 
 void SubtitleTranslation::onStopTaskClicked()
 {
+    if (m_streamPreviewTimer) {
+        m_streamPreviewTimer->stop();
+    }
+    m_pendingStreamRawContent.clear();
+
     if (m_currentSegment < 0 && !m_waitingExportToContinue && !ui->startTranslateButton->isEnabled()) {
         m_userStoppedTask = true;
         m_llmClient->cancelAll();
@@ -1214,6 +1268,7 @@ void SubtitleTranslation::onClearOutputClicked()
 {
     m_outputPreviewText.clear();
     m_outputLogLines.clear();
+    m_outputAutoFollow = true;
     renderOutputPanel();
 }
 
@@ -1253,6 +1308,14 @@ void SubtitleTranslation::onModelsReady(const QStringList &models)
 
 void SubtitleTranslation::onChatCompleted(const QString &content, const QJsonObject &)
 {
+    if (m_streamPreviewTimer) {
+        m_streamPreviewTimer->stop();
+    }
+    if (!m_pendingStreamRawContent.isEmpty()) {
+        updateLivePreview(m_pendingStreamRawContent);
+        m_pendingStreamRawContent.clear();
+    }
+
     if (m_currentSegment >= 0) {
         applySegmentTranslationResult(content);
         return;
@@ -1272,7 +1335,10 @@ void SubtitleTranslation::onStreamChunkReceived(const QString &, const QString &
         return;
     }
 
-    updateLivePreview(aggregatedContent);
+    m_pendingStreamRawContent = aggregatedContent;
+    if (m_streamPreviewTimer && !m_streamPreviewTimer->isActive()) {
+        m_streamPreviewTimer->start();
+    }
     ui->progressStatusLabel->setText(tr("第 %1/%2 段流式返回中...").arg(m_currentSegment + 1).arg(m_segments.size()));
 }
 

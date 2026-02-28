@@ -10,6 +10,8 @@
 #include <QVector>
 #include <QWidget>
 
+class QTimer;
+
 class LlmServiceClient;
 
 namespace Ui {
@@ -71,6 +73,7 @@ private:
     QString cleanSrtPreviewText(const QString &rawText) const;
     void applySegmentTranslationResult(const QString &rawResponse);
     void updateLivePreview(const QString &rawResponse);
+    void flushPendingStreamPreview();
 
     bool prepareExportTargetPath();
     void writeCurrentSegmentIntermediateFile();
@@ -110,6 +113,8 @@ private:
 
     QStringList m_outputLogLines;
     QString m_outputPreviewText;
+    bool m_outputAutoFollow = true;
+    bool m_restoringOutputScroll = false;
 
     QVector<SubtitleEntry> m_sourceEntries;
     QVector<QVector<SubtitleEntry>> m_segments;
@@ -125,6 +130,8 @@ private:
     LlmServiceConfig m_activeConfig;
     QJsonObject m_activeOptions;
     PromptComposeInput m_activeComposeInput;
+    QTimer *m_streamPreviewTimer = nullptr;
+    QString m_pendingStreamRawContent;
 };
 
 #endif // SUBTITLETRANSLATION_H

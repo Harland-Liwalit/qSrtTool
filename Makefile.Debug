@@ -3833,6 +3833,8 @@ debug/subtitletranslation.o: src/Modules/Translator/subtitletranslation.cpp src/
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtGui/QGuiApplication \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/QJsonDocument \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/qjsondocument.h \
+		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtWidgets/QInputDialog \
+		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtWidgets/qinputdialog.h \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtWidgets/QMessageBox \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtWidgets/qmessagebox.h \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/QRegularExpression \
@@ -3842,7 +3844,10 @@ debug/subtitletranslation.o: src/Modules/Translator/subtitletranslation.cpp src/
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/qsettings.h \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/QTextStream \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtGui/QClipboard \
-		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtGui/qclipboard.h
+		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtGui/qclipboard.h \
+		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/QTimer \
+		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/qtimer.h \
+		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/qbasictimer.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o debug\subtitletranslation.o src\Modules\Translator\subtitletranslation.cpp
 
 debug/videodownloader.o: src/Modules/Downloder/videodownloader.cpp src/Modules/Downloder/videodownloader.h \
