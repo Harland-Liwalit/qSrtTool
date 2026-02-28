@@ -22,9 +22,12 @@ struct LlmServiceConfig
     bool stream = false;
     int timeoutMs = 60000;
 
+    // 规范化基础地址（去尾斜杠、按 provider 做兼容修正）。
     QString normalizedBaseUrl() const;
+    // 判断配置是否可用于发起请求。
     bool isValid() const;
 
+    // 根据 provider 返回默认基础地址。
     static QString defaultBaseUrlForProvider(const QString &provider);
 };
 
@@ -36,10 +39,13 @@ public:
     explicit LlmServiceClient(QObject *parent = nullptr);
     ~LlmServiceClient() override;
 
+    // 请求远端模型列表。
     void requestModels(const LlmServiceConfig &config);
+    // 发送聊天补全请求（支持流式与非流式）。
     void requestChatCompletion(const LlmServiceConfig &config,
                                const QJsonArray &messages,
                                const QJsonObject &options = QJsonObject());
+    // 取消当前所有进行中的网络请求。
     void cancelAll();
 
 signals:

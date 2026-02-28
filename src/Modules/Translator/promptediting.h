@@ -20,6 +20,7 @@ public:
                            QWidget *parent = nullptr);
     ~PromptEditing();
 
+    // 返回本次对话框保存成功的预设路径。
     QString savedPresetPath() const;
 
 private:
@@ -30,10 +31,15 @@ private:
     QJsonObject buildPresetFromUi();
     QJsonObject createDefaultPreset() const;
 
+    // 读取指定预设文件并回填 UI。
     void loadPresetFromFile(const QString &filePath);
+    // 新建默认预设草稿。
     void createNewPreset();
+    // 导入外部 JSON 预设。
     void importPresetJson();
+    // 导出当前预设为 JSON。
     void exportPresetJson();
+    // 保存预设并关闭对话框。
     void savePresetAndAccept();
 
     void refreshPromptList();
@@ -51,6 +57,7 @@ private:
     void removeOrderItem();
     void applyManualOrder();
 
+    // 同步并刷新右侧 JSON 预览。
     void refreshJsonPreview();
     QString sanitizeFileName(const QString &fileName) const;
 
