@@ -1,5 +1,9 @@
 #include "llmserviceclient.h"
+#include "apiformatmanager.h"
 
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonValue>
 #include <QIODevice>
@@ -29,6 +33,48 @@ QString joinUrl(const QString &baseUrl, const QString &path)
     }
     return normalized + endpoint;
 }
+
+QString persistRequestPayloadForDebug(const QByteArray &payload,
+                                     const QString &requestUrl,
+                                     int statusCode)
+{
+    if (payload.isEmpty()) {
+        return QString();
+    }
+
+    const QString debugDirPath = QDir::currentPath() + "/temp/translator_http_debug";
+    QDir().mkpath(debugDirPath);
+
+    const QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss_zzz");
+    const QString fileName = QStringLiteral("request_%1_%2.json")
+                                 .arg(timestamp)
+                                 .arg(statusCode > 0 ? QString::number(statusCode) : QStringLiteral("error"));
+    const QString filePath = QDir(debugDirPath).filePath(fileName);
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        return QString();
+    }
+
+    QByteArray output = payload;
+    QJsonParseError parseError;
+    const QJsonDocument requestDocument = QJsonDocument::fromJson(payload, &parseError);
+    if (parseError.error == QJsonParseError::NoError && requestDocument.isObject()) {
+        output = requestDocument.toJson(QJsonDocument::Indented);
+    }
+
+    file.write(output);
+    file.write("\n\n");
+    if (!requestUrl.trimmed().isEmpty()) {
+        file.write(QStringLiteral("# URL: %1\n").arg(requestUrl).toUtf8());
+    }
+    if (statusCode > 0) {
+        file.write(QStringLiteral("# HTTP Status: %1\n").arg(statusCode).toUtf8());
+    }
+    file.close();
+
+    return filePath;
+}
 }
 
 QString LlmServiceConfig::normalizedBaseUrl() const
@@ -40,6 +86,12 @@ QString LlmServiceConfig::normalizedBaseUrl() const
     while (base.endsWith('/')) {
         base.chop(1);
     }
+
+    const QString normalizedProviderName = provider.trimmed().toLower();
+    if (normalizedProviderName.contains("deepseek") && base.endsWith("/v1", Qt::CaseInsensitive)) {
+        base.chop(3);
+    }
+
     return base;
 }
 
@@ -59,6 +111,9 @@ QString LlmServiceConfig::defaultBaseUrlForProvider(const QString &provider)
     }
     if (normalized.contains("openai api")) {
         return QStringLiteral("https://api.openai.com/v1");
+    }
+    if (normalized.contains("deepseek")) {
+        return QStringLiteral("https://api.deepseek.com");
     }
     return QStringLiteral("http://127.0.0.1:1234/v1");
 }
@@ -81,9 +136,8 @@ void LlmServiceClient::requestModels(const LlmServiceConfig &config)
         return;
     }
 
-    const QString provider = normalizedProvider(config.provider);
-    const QString endpoint = provider.contains("ollama") ? QStringLiteral("/api/tags")
-                                                          : QStringLiteral("/models");
+    const QString provider = ApiFormatManager::providerId(config.provider, config.normalizedBaseUrl());
+    const QString endpoint = ApiFormatManager::modelListEndpoint(provider);
     const QNetworkRequest request = buildRequest(config, endpoint);
     const int timeoutMs = config.timeoutMs > 0 ? config.timeoutMs : 30000;
     sendRequest(request, QByteArray(), ReplyKind::ModelList, timeoutMs);
@@ -103,9 +157,8 @@ void LlmServiceClient::requestChatCompletion(const LlmServiceConfig &config,
         return;
     }
 
-    const QString provider = normalizedProvider(config.provider);
-    const QString endpoint = provider.contains("ollama") ? QStringLiteral("/api/chat")
-                                                          : QStringLiteral("/chat/completions");
+    const QString provider = ApiFormatManager::providerId(config.provider, config.normalizedBaseUrl());
+    const QString endpoint = ApiFormatManager::chatEndpoint(provider);
 
     const QJsonObject body = buildChatBody(config, messages, options);
     QNetworkRequest request = buildRequest(config, endpoint);
@@ -143,7 +196,7 @@ void LlmServiceClient::sendRequest(const QNetworkRequest &request,
         return;
     }
 
-    attachReply(reply, kind, timeoutMs);
+    attachReply(reply, kind, timeoutMs, payload);
 }
 
 QNetworkRequest LlmServiceClient::buildRequest(const LlmServiceConfig &config, const QString &endpointPath) const
@@ -170,25 +223,12 @@ QJsonObject LlmServiceClient::buildChatBody(const LlmServiceConfig &config,
                                             const QJsonArray &messages,
                                             const QJsonObject &options) const
 {
-    const QString provider = normalizedProvider(config.provider);
-
-    QJsonObject body;
-    body.insert("messages", messages);
-    body.insert("stream", config.stream);
-
-    if (!config.model.trimmed().isEmpty()) {
-        body.insert("model", config.model.trimmed());
-    }
-
-    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
-        body.insert(it.key(), it.value());
-    }
-
-    if (provider.contains("ollama")) {
-        body.remove("max_tokens");
-    }
-
-    return body;
+    const QString provider = ApiFormatManager::providerId(config.provider, config.normalizedBaseUrl());
+    return ApiFormatManager::buildChatBody(provider,
+                                           config.model,
+                                           config.stream,
+                                           messages,
+                                           options);
 }
 
 QString LlmServiceClient::extractChatContent(const QJsonObject &responseObject) const
@@ -317,6 +357,30 @@ QString LlmServiceClient::normalizeErrorMessage(QNetworkReply *reply, const QByt
 
     const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QString bodyText = QString::fromUtf8(responseBody).trimmed();
+    const QString requestUrl = m_replyRequestUrl.value(reply);
+    const QByteArray requestPayloadRaw = m_replyRequestPayload.value(reply);
+
+    const QString payloadDumpPath = persistRequestPayloadForDebug(requestPayloadRaw,
+                                                                  requestUrl,
+                                                                  statusCode);
+
+    auto withRequestContext = [&](const QString &base) -> QString {
+        QStringList details;
+        if (!requestUrl.isEmpty()) {
+            details << tr("请求地址：%1").arg(requestUrl);
+        }
+
+        if (!payloadDumpPath.isEmpty()) {
+            details << tr("完整请求体已写入：%1").arg(payloadDumpPath);
+        } else if (!requestPayloadRaw.isEmpty()) {
+            details << tr("完整请求体写入调试文件失败");
+        }
+
+        if (details.isEmpty()) {
+            return base;
+        }
+        return base + QStringLiteral("\n") + details.join(QStringLiteral("\n"));
+    };
 
     if (reply->error() == QNetworkReply::OperationCanceledError && m_replyTimedOut.value(reply, false)) {
         const int timeoutMs = m_replyTimeoutMs.value(reply, 0);
@@ -324,12 +388,12 @@ QString LlmServiceClient::normalizeErrorMessage(QNetworkReply *reply, const QByt
                                     ? tr("请求超时（%1 ms）后被客户端中止").arg(timeoutMs)
                                     : tr("请求被客户端中止");
         if (!bodyText.isEmpty()) {
-            return tr("%1\nHTTP %2\n完整响应：\n%3")
+            return withRequestContext(tr("%1\nHTTP %2\n完整响应：\n%3")
                 .arg(timeoutText)
                 .arg(statusCode)
-                .arg(bodyText);
+                .arg(bodyText));
         }
-        return timeoutText;
+        return withRequestContext(timeoutText);
     }
 
     if (!responseBody.isEmpty()) {
@@ -340,37 +404,37 @@ QString LlmServiceClient::normalizeErrorMessage(QNetworkReply *reply, const QByt
             const QJsonObject errorObject = root.value("error").toObject();
             const QString errorMessage = errorObject.value("message").toString().trimmed();
             if (!errorMessage.isEmpty()) {
-                return tr("HTTP %1\n错误消息：%2\n完整响应：\n%3")
+                return withRequestContext(tr("HTTP %1\n错误消息：%2\n完整响应：\n%3")
                     .arg(statusCode)
                     .arg(errorMessage)
-                    .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed());
+                    .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed()));
             }
 
             const QString fallbackMessage = root.value("message").toString().trimmed();
             if (!fallbackMessage.isEmpty()) {
-                return tr("HTTP %1\n错误消息：%2\n完整响应：\n%3")
+                return withRequestContext(tr("HTTP %1\n错误消息：%2\n完整响应：\n%3")
                     .arg(statusCode)
                     .arg(fallbackMessage)
-                    .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed());
+                    .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed()));
             }
 
-            return tr("HTTP %1\n完整响应：\n%2")
+            return withRequestContext(tr("HTTP %1\n完整响应：\n%2")
                 .arg(statusCode)
-                .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed());
+                .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed()));
         }
 
-        return tr("HTTP %1\n完整响应：\n%2").arg(statusCode).arg(bodyText);
+        return withRequestContext(tr("HTTP %1\n完整响应：\n%2").arg(statusCode).arg(bodyText));
     }
 
     const QString qtError = reply->errorString().trimmed();
     if (statusCode > 0) {
-        return qtError.isEmpty() ? tr("HTTP %1 请求失败").arg(statusCode)
-                                 : tr("HTTP %1 %2").arg(statusCode).arg(qtError);
+        return withRequestContext(qtError.isEmpty() ? tr("HTTP %1 请求失败").arg(statusCode)
+                                                    : tr("HTTP %1 %2").arg(statusCode).arg(qtError));
     }
-    return qtError.isEmpty() ? tr("请求失败") : qtError;
+    return withRequestContext(qtError.isEmpty() ? tr("请求失败") : qtError);
 }
 
-void LlmServiceClient::attachReply(QNetworkReply *reply, ReplyKind kind, int timeoutMs)
+void LlmServiceClient::attachReply(QNetworkReply *reply, ReplyKind kind, int timeoutMs, const QByteArray &payload)
 {
     ++m_activeRequests;
     if (m_activeRequests == 1) {
@@ -378,6 +442,8 @@ void LlmServiceClient::attachReply(QNetworkReply *reply, ReplyKind kind, int tim
     }
 
     m_replyKinds.insert(reply, kind);
+    m_replyRequestPayload.insert(reply, payload);
+    m_replyRequestUrl.insert(reply, reply->request().url().toString());
     const bool requestMarkedStreaming = reply->request().hasRawHeader("X-QSrtTool-Stream")
                                         && reply->request().rawHeader("X-QSrtTool-Stream") == "1";
     m_replyStreaming.insert(reply, kind == ReplyKind::ChatCompletion && requestMarkedStreaming);
@@ -537,6 +603,8 @@ void LlmServiceClient::finalizeReply(QNetworkReply *reply)
     m_replyKinds.remove(reply);
     m_replyTimedOut.remove(reply);
     m_replyTimeoutMs.remove(reply);
+    m_replyRequestPayload.remove(reply);
+    m_replyRequestUrl.remove(reply);
     m_replyStreaming.remove(reply);
     m_streamBuffers.remove(reply);
     m_streamAccumulated.remove(reply);

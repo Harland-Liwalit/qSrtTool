@@ -1,3 +1,4 @@
+release/apiformatmanager.o
 release/dependencymanager.o
 release/executablecapabilities.o
 release/embeddedffmpegplayer.o

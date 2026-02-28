@@ -1,3 +1,4 @@
+debug/apiformatmanager.o
 debug/dependencymanager.o
 debug/executablecapabilities.o
 debug/embeddedffmpegplayer.o

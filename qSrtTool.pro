@@ -18,6 +18,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    src/Modules/Translator/apiformatmanager.cpp \
     src/Core/dependencymanager.cpp \
     src/Core/executablecapabilities.cpp \
     src/Modules/Loader/embeddedffmpegplayer.cpp \
@@ -40,6 +41,7 @@ SOURCES += \
     src/Modules/Loader/videoloader.cpp
 
 HEADERS += \
+    src/Modules/Translator/apiformatmanager.h \
     src/Core/dependencymanager.h \
     src/Core/executablecapabilities.h \
     src/Modules/Loader/embeddedffmpegplayer.h \

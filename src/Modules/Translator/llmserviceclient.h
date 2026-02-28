@@ -73,7 +73,7 @@ private:
     void processStreamingPayload(QNetworkReply *reply, const QByteArray &payloadChunk);
     void consumeStreamingLine(QNetworkReply *reply, const QByteArray &line);
 
-    void attachReply(QNetworkReply *reply, ReplyKind kind, int timeoutMs);
+    void attachReply(QNetworkReply *reply, ReplyKind kind, int timeoutMs, const QByteArray &payload);
     void finalizeReply(QNetworkReply *reply);
 
     QNetworkAccessManager *m_networkManager = nullptr;
@@ -81,6 +81,8 @@ private:
     QHash<QNetworkReply *, QTimer *> m_replyTimers;
     QHash<QNetworkReply *, bool> m_replyTimedOut;
     QHash<QNetworkReply *, int> m_replyTimeoutMs;
+    QHash<QNetworkReply *, QByteArray> m_replyRequestPayload;
+    QHash<QNetworkReply *, QString> m_replyRequestUrl;
     QHash<QNetworkReply *, bool> m_replyStreaming;
     QHash<QNetworkReply *, QByteArray> m_streamBuffers;
     QHash<QNetworkReply *, QString> m_streamAccumulated;

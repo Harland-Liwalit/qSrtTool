@@ -94,6 +94,7 @@ private slots:
     void onRequestFailed(const QString &stage, const QString &message);
     void onBusyChanged(bool busy);
     void onExportSrtClicked();
+    void onStopTaskClicked();
     void onCopyResultClicked();
     void onClearOutputClicked();
 
@@ -116,6 +117,7 @@ private:
 
     int m_currentSegment = -1;
     bool m_waitingExportToContinue = false;
+    bool m_userStoppedTask = false;
     QString m_currentSegmentRawResponse;
     QString m_currentSegmentCleanPreview;
     QString m_lastFinalMergedSrt;

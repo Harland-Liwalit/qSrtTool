@@ -213,6 +213,11 @@ QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
               <string>OpenAI API</string>
              </property>
             </item>
+            <item>
+             <property name="text">
+              <string>DeepSeek API</string>
+             </property>
+            </item>
            </widget>
           </item>
           <item row="1" column="0">
@@ -690,6 +695,13 @@ QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
             </property>
            </widget>
           </item>
+            <item>
+             <widget class="QPushButton" name="stopTaskButton">
+              <property name="text">
+               <string>停止任务</string>
+              </property>
+             </widget>
+            </item>
           <item>
            <widget class="QPushButton" name="copyResultButton">
             <property name="text">

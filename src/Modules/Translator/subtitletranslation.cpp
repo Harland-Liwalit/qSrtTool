@@ -173,6 +173,7 @@ SubtitleTranslation::SubtitleTranslation(QWidget *parent) :
     connect(ui->refreshModelButton, &QPushButton::clicked, this, &SubtitleTranslation::refreshRemoteModels);
     connect(ui->startTranslateButton, &QPushButton::clicked, this, &SubtitleTranslation::startSegmentedTranslation);
     connect(ui->exportSrtButton, &QPushButton::clicked, this, &SubtitleTranslation::onExportSrtClicked);
+    connect(ui->stopTaskButton, &QPushButton::clicked, this, &SubtitleTranslation::onStopTaskClicked);
     connect(ui->copyResultButton, &QPushButton::clicked, this, &SubtitleTranslation::onCopyResultClicked);
     connect(ui->clearOutputButton, &QPushButton::clicked, this, &SubtitleTranslation::onClearOutputClicked);
         connect(ui->presetComboBox,
@@ -244,6 +245,7 @@ SubtitleTranslation::SubtitleTranslation(QWidget *parent) :
 
     applySharedPresetParameters();
     renderOutputPanel();
+    ui->stopTaskButton->setEnabled(false);
 }
 
 SubtitleTranslation::~SubtitleTranslation()
@@ -462,7 +464,7 @@ void SubtitleTranslation::applyProviderDefaults(bool forceResetHost)
     }
 
     const QString normalized = provider.toLower();
-    if (normalized.contains("openai api")) {
+    if (normalized.contains("openai api") || normalized.contains("deepseek")) {
         if (m_savedApiKey.isEmpty()) {
             ui->apiKeyLineEdit->setPlaceholderText(tr("首次输入后将加密保存"));
         } else {
@@ -667,6 +669,10 @@ void SubtitleTranslation::appendOutputMessage(const QString &message)
 
 void SubtitleTranslation::renderOutputPanel()
 {
+    QScrollBar *scrollBar = ui->outputTextEdit->verticalScrollBar();
+    const int oldValue = scrollBar ? scrollBar->value() : 0;
+    const int oldMaximum = scrollBar ? scrollBar->maximum() : 0;
+
     QStringList blocks;
     blocks << QStringLiteral("【输出预览】");
     blocks << (m_outputPreviewText.trimmed().isEmpty() ? tr("(暂无预览内容)") : m_outputPreviewText.trimmed());
@@ -679,6 +685,16 @@ void SubtitleTranslation::renderOutputPanel()
     }
 
     ui->outputTextEdit->setPlainText(blocks.join('\n'));
+
+    if (scrollBar) {
+        const int newMaximum = scrollBar->maximum();
+        int targetValue = oldValue;
+        if (oldMaximum > 0) {
+            const double ratio = static_cast<double>(oldValue) / static_cast<double>(oldMaximum);
+            targetValue = qRound(ratio * static_cast<double>(newMaximum));
+        }
+        scrollBar->setValue(qBound(0, targetValue, newMaximum));
+    }
 }
 
 void SubtitleTranslation::importSrtFile()
@@ -843,6 +859,7 @@ void SubtitleTranslation::resetTranslationSessionState()
 
 void SubtitleTranslation::startSegmentedTranslation()
 {
+    m_userStoppedTask = false;
     syncSharedParametersToPreset();
 
     const LlmServiceConfig config = collectServiceConfig();
@@ -1155,6 +1172,30 @@ void SubtitleTranslation::onExportSrtClicked()
     exportFinalMergedSrt();
 }
 
+void SubtitleTranslation::onStopTaskClicked()
+{
+    if (m_currentSegment < 0 && !m_waitingExportToContinue && !ui->startTranslateButton->isEnabled()) {
+        m_userStoppedTask = true;
+        m_llmClient->cancelAll();
+        appendOutputMessage(tr("已请求停止当前任务，正在中止网络请求..."));
+        return;
+    }
+
+    if (m_currentSegment >= 0 || m_waitingExportToContinue) {
+        m_userStoppedTask = true;
+        m_llmClient->cancelAll();
+        resetTranslationSessionState();
+        ui->translateProgressBar->setRange(0, 100);
+        ui->translateProgressBar->setValue(0);
+        ui->progressStatusLabel->setText(tr("任务已手动停止"));
+        appendOutputMessage(tr("已手动停止当前翻译任务，可修改提示词后重新开始。"));
+        onBusyChanged(false);
+        return;
+    }
+
+    appendOutputMessage(tr("当前没有可停止的任务。"));
+}
+
 void SubtitleTranslation::onCopyResultClicked()
 {
     const QString content = m_outputPreviewText.trimmed();
@@ -1237,6 +1278,14 @@ void SubtitleTranslation::onStreamChunkReceived(const QString &, const QString &
 
 void SubtitleTranslation::onRequestFailed(const QString &stage, const QString &message)
 {
+    if (m_userStoppedTask) {
+        m_userStoppedTask = false;
+        ui->translateProgressBar->setRange(0, 100);
+        ui->translateProgressBar->setValue(0);
+        ui->progressStatusLabel->setText(tr("任务已手动停止"));
+        return;
+    }
+
     m_waitingExportToContinue = false;
     ui->translateProgressBar->setRange(0, 100);
     ui->translateProgressBar->setValue(0);
@@ -1249,4 +1298,5 @@ void SubtitleTranslation::onBusyChanged(bool busy)
     ui->refreshModelButton->setEnabled(!busy);
     ui->startTranslateButton->setEnabled(!busy);
     ui->exportSrtButton->setEnabled(!busy || m_waitingExportToContinue);
+    ui->stopTaskButton->setEnabled(busy || m_currentSegment >= 0 || m_waitingExportToContinue);
 }

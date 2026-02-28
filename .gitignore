@@ -1,7 +1,15 @@
 # Build directories (Qt Creator and generic build outputs)
 /build/
 /build-*/
+/debug/
+/release/
 /Release/
+/Debug/
+
+# qmake generated build files (when generated in project root)
+/Makefile
+/Makefile.*
+/object_script.*
 
 # Qt Creator user/session files
 *.pro.user
