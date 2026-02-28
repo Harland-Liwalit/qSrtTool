@@ -7,6 +7,7 @@
 
 class QTimer;
 class SubtitleBurnTaskRunner;
+class EmbeddedFfmpegPlayer;
 
 namespace Ui {
 class SubtitleBurning;
@@ -29,6 +30,7 @@ private:
     QString m_inputVideoPath;
     QString m_externalSubtitlePath;
     SubtitleBurnTaskRunner *m_burnTaskRunner = nullptr;
+    EmbeddedFfmpegPlayer *m_previewPlayer = nullptr;
 
     void setToolsLoading(bool loading);
     void updateToolsSpinner();

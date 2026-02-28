@@ -3,6 +3,7 @@
 #include "subtitleburncommandbuilder.h"
 #include "subtitlecontainerprofile.h"
 #include "subtitleburntaskrunner.h"
+#include "../Loader/embeddedffmpegplayer.h"
 
 #include <QDir>
 #include <QFileDialog>
@@ -85,6 +86,27 @@ void SubtitleBurning::updateToolsSpinner()
 
 void SubtitleBurning::setupBurnWorkflowUi()
 {
+    if (!m_previewPlayer && ui->previewLayout) {
+        // 复用 Loader 模块的嵌入式播放器，避免在 Burner 中重复维护解码与渲染逻辑。
+        m_previewPlayer = new EmbeddedFfmpegPlayer(ui->previewFrame);
+        m_previewPlayer->setMinimumHeight(220);
+        ui->previewLayout->addWidget(m_previewPlayer);
+
+        if (ui->previewLabel) {
+            ui->previewLabel->hide();
+        }
+
+        connect(m_previewPlayer, &EmbeddedFfmpegPlayer::statusMessage, this, [this](const QString &message) {
+            appendLogLine(tr("预览：%1").arg(message));
+        });
+        connect(m_previewPlayer, &EmbeddedFfmpegPlayer::playbackError, this, [this](const QString &reason) {
+            appendLogLine(tr("预览失败：%1").arg(reason));
+        });
+        connect(m_previewPlayer, &EmbeddedFfmpegPlayer::ffmpegMissing, this, [this]() {
+            appendLogLine(tr("预览缺少 FFmpeg：请先在 deps 目录准备 FFmpeg。"));
+        });
+    }
+
     populateContainerOptions();
 
     if (ui->logTextEdit) {
@@ -109,7 +131,12 @@ void SubtitleBurning::setupBurnWorkflowUi()
 
         m_inputVideoPath = selectedPath;
         saveLastVideoImportDirectory(selectedPath);
-        if (ui->previewLabel) {
+
+        if (m_previewPlayer) {
+            if (m_previewPlayer->loadVideo(selectedPath)) {
+                m_previewPlayer->playPause();
+            }
+        } else if (ui->previewLabel) {
             ui->previewLabel->setText(QFileInfo(selectedPath).fileName());
         }
 
