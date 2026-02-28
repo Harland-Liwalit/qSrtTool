@@ -10,6 +10,7 @@ class QTimer;
 class QToolButton;
 class QWidget;
 class VideoLoader;
+class VideoDownloader;
 class SubtitleExtraction;
 #ifdef Q_OS_WIN
 #include <pdh.h>
@@ -37,6 +38,7 @@ private:
     QTimer *perfTimer = nullptr;
     bool m_dependencyAutoTriggered = false;
     bool m_skipPromptForCurrentTask = false;
+    VideoDownloader *m_downloadPage = nullptr;
     VideoLoader *m_loaderPage = nullptr;
     SubtitleExtraction *m_whisperPage = nullptr;
     QHash<QToolButton *, QWidget *> m_navToPage;

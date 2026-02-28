@@ -41,6 +41,8 @@ SOURCES += \
     src/Modules/Whisper/whispercommandbuilder.cpp \
     src/Modules/Whisper/whisperruntimeselector.cpp \
     src/Modules/Translator/subtitletranslation.cpp \
+    src/Modules/Downloder/videodownloadcommandbuilder.cpp \
+    src/Modules/Downloder/videodownloadtaskrunner.cpp \
     src/Modules/Downloder/videodownloader.cpp \
     src/Modules/Loader/videoloader.cpp
 
@@ -67,6 +69,8 @@ HEADERS += \
     src/Modules/Whisper/whispercommandbuilder.h \
     src/Modules/Whisper/whisperruntimeselector.h \
     src/Modules/Translator/subtitletranslation.h \
+    src/Modules/Downloder/videodownloadcommandbuilder.h \
+    src/Modules/Downloder/videodownloadtaskrunner.h \
     src/Modules/Downloder/videodownloader.h \
     src/Modules/Loader/videoloader.h
 

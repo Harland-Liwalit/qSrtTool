@@ -95,6 +95,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_loaderPage = loaderPage;
     m_whisperPage = whisperPage;
+    m_downloadPage = downloadPage;
 
     ui->mainStackedWidget->addWidget(downloadPage);
     ui->mainStackedWidget->addWidget(loaderPage);
@@ -515,6 +516,10 @@ bool MainWindow::hasActiveTasksOnPage(QWidget *page) const
         return false;
     }
 
+    if (page == m_downloadPage && m_downloadPage) {
+        return m_downloadPage->hasRunningTask();
+    }
+
     if (page == m_loaderPage && m_loaderPage) {
         return m_loaderPage->hasRunningTask();
     }
@@ -528,6 +533,10 @@ void MainWindow::stopAllTasksOnPage(QWidget *page)
 {
     if (!page) {
         return;
+    }
+
+    if (page == m_downloadPage && m_downloadPage) {
+        m_downloadPage->stopAllTasks();
     }
 
     if (page == m_loaderPage && m_loaderPage) {
