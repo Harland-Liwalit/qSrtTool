@@ -32,7 +32,10 @@ SOURCES += \
     src/main.cpp \
     src/mainwindow.cpp \
     src/Modules/OutputMgr/outputmanagement.cpp \
+    src/Modules/Burner/subtitleburncommandbuilder.cpp \
+    src/Modules/Burner/subtitlecontainerprofile.cpp \
     src/Modules/Burner/subtitleburning.cpp \
+    src/Modules/Burner/subtitleburntaskrunner.cpp \
     src/Modules/Whisper/subtitleextraction.cpp \
     src/Modules/Whisper/whispersegmentmerger.cpp \
     src/Modules/Whisper/whispercommandbuilder.cpp \
@@ -55,7 +58,10 @@ HEADERS += \
     src/Widgets/progressbox.h \
     src/mainwindow.h \
     src/Modules/OutputMgr/outputmanagement.h \
+    src/Modules/Burner/subtitleburncommandbuilder.h \
+    src/Modules/Burner/subtitlecontainerprofile.h \
     src/Modules/Burner/subtitleburning.h \
+    src/Modules/Burner/subtitleburntaskrunner.h \
     src/Modules/Whisper/subtitleextraction.h \
     src/Modules/Whisper/whispersegmentmerger.h \
     src/Modules/Whisper/whispercommandbuilder.h \
