@@ -27,7 +27,8 @@ signals:
     void taskStarted();
     void taskLog(const QString &line);
     void progressChanged(int percent);
-    void destinationResolved(const QString &fileName);
+    void destinationResolved(const QString &filePath);
+    void metadataResolved(const QString &resolution, const QString &duration, const QString &fps);
     void taskFinished(bool success, bool canceled, const QString &message);
 
 private slots:
@@ -39,6 +40,8 @@ private:
     QString resolveYtDlpPath() const;
     QString resolveExecutableInDeps(const QStringList &candidateNames) const;
     void processOutputLine(const QString &line);
+    void queryAndEmitMetadata(const QString &ytDlpPath, const QString &url);
+    static QString formatDurationSeconds(double seconds);
 
     QProcess *m_process = nullptr;
     bool m_cancelRequested = false;

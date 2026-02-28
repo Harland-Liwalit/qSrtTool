@@ -3,6 +3,8 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 #include <QtMath>
 
@@ -46,6 +48,9 @@ void VideoDownloadTaskRunner::startTask(const VideoDownloadRequest &request)
 
     m_cancelRequested = false;
     m_stdoutBuffer.clear();
+
+    // 在正式下载前探测任务基础信息（分辨率/时长/FPS），用于前端展示。
+    queryAndEmitMetadata(ytDlpPath, request.url);
 
     emit taskLog(QStringLiteral("开始执行 yt-dlp..."));
     emit taskLog(QStringLiteral("命令：%1 %2").arg(ytDlpPath, args.join(' ')));
@@ -166,9 +171,85 @@ void VideoDownloadTaskRunner::processOutputLine(const QString &line)
     const QRegularExpressionMatch destinationMatch = destinationRegex.match(line);
     if (destinationMatch.hasMatch()) {
         const QString filePath = destinationMatch.captured(1).trimmed();
-        const QString fileName = QFileInfo(filePath).fileName();
-        if (!fileName.isEmpty()) {
-            emit destinationResolved(fileName);
+        if (!filePath.isEmpty()) {
+            emit destinationResolved(filePath);
         }
     }
+}
+
+void VideoDownloadTaskRunner::queryAndEmitMetadata(const QString &ytDlpPath, const QString &url)
+{
+    if (ytDlpPath.isEmpty() || url.trimmed().isEmpty()) {
+        return;
+    }
+
+    QProcess probe;
+    probe.setProcessChannelMode(QProcess::MergedChannels);
+
+    QStringList args;
+    args << "--dump-single-json"
+         << "--no-playlist"
+         << "--no-warnings"
+         << url.trimmed();
+
+    probe.start(ytDlpPath, args);
+    if (!probe.waitForStarted(2000)) {
+        return;
+    }
+
+    if (!probe.waitForFinished(12000)) {
+        probe.kill();
+        probe.waitForFinished(500);
+        return;
+    }
+
+    const QString output = QString::fromUtf8(probe.readAllStandardOutput()).trimmed();
+    if (output.isEmpty()) {
+        return;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(output.toUtf8());
+    if (!doc.isObject()) {
+        return;
+    }
+
+    const QJsonObject obj = doc.object();
+
+    QString resolution = obj.value(QStringLiteral("resolution")).toString().trimmed();
+    if (resolution.isEmpty()) {
+        const int width = obj.value(QStringLiteral("width")).toInt();
+        const int height = obj.value(QStringLiteral("height")).toInt();
+        if (width > 0 && height > 0) {
+            resolution = QStringLiteral("%1x%2").arg(width).arg(height);
+        }
+    }
+
+    const double durationSeconds = obj.value(QStringLiteral("duration")).toDouble(-1.0);
+    const QString duration = durationSeconds > 0.0
+                                 ? formatDurationSeconds(durationSeconds)
+                                 : QStringLiteral("--");
+
+    QString fps = QStringLiteral("--");
+    const double fpsValue = obj.value(QStringLiteral("fps")).toDouble(-1.0);
+    if (fpsValue > 0.0) {
+        fps = QString::number(fpsValue, 'f', fpsValue >= 10.0 ? 1 : 2);
+    }
+
+    if (resolution.isEmpty()) {
+        resolution = QStringLiteral("--");
+    }
+
+    emit metadataResolved(resolution, duration, fps);
+}
+
+QString VideoDownloadTaskRunner::formatDurationSeconds(double seconds)
+{
+    const int total = qMax(0, qRound(seconds));
+    const int hh = total / 3600;
+    const int mm = (total % 3600) / 60;
+    const int ss = total % 60;
+    return QStringLiteral("%1:%2:%3")
+        .arg(hh, 2, 10, QChar('0'))
+        .arg(mm, 2, 10, QChar('0'))
+        .arg(ss, 2, 10, QChar('0'));
 }

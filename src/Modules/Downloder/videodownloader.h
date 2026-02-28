@@ -62,6 +62,11 @@ private:
     /// @brief 更新队列项可视状态
     void setItemStatus(QTreeWidgetItem *item, const QString &progressText, const QString &statusText);
 
+    /// @brief 取消当前选中的任务（运行中或待下载）
+    void cancelSelectedTask();
+    /// @brief 根据队列项查找正在执行该任务的 runner
+    VideoDownloadTaskRunner *runnerForItem(QTreeWidgetItem *item) const;
+
     /// @brief 启动并发调度，尽可能补满并发槽位
     void schedulePendingTasks();
     /// @brief 获取一个可启动的待处理队列项

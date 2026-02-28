@@ -7,6 +7,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
+#include <QFile>
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QMessageBox>
@@ -23,6 +24,7 @@ constexpr int RoleStatus = Qt::UserRole + 2;
 constexpr int RoleFormatId = Qt::UserRole + 3;
 constexpr int RoleQualityId = Qt::UserRole + 4;
 constexpr int RoleOutputDir = Qt::UserRole + 5;
+constexpr int RoleLocalFilePath = Qt::UserRole + 6;
 
 const char *StatusPending = "pending";
 const char *StatusRunning = "running";
@@ -131,15 +133,32 @@ void VideoDownloader::setupDownloadUi()
     }
 
     if (ui->downloadsTree) {
+        ui->downloadsTree->setColumnCount(6);
+        ui->downloadsTree->setHeaderLabels(QStringList()
+                                           << QStringLiteral("文件")
+                                           << QStringLiteral("进度")
+                                           << QStringLiteral("状态")
+                                           << QStringLiteral("分辨率")
+                                           << QStringLiteral("时长")
+                                           << QStringLiteral("FPS"));
         ui->downloadsTree->setRootIsDecorated(false);
         ui->downloadsTree->setUniformRowHeights(true);
         ui->downloadsTree->setAlternatingRowColors(false);
         ui->downloadsTree->setSelectionMode(QAbstractItemView::SingleSelection);
         if (ui->downloadsTree->header()) {
+            ui->downloadsTree->header()->setStretchLastSection(false);
             ui->downloadsTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
             ui->downloadsTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
             ui->downloadsTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+            ui->downloadsTree->header()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+            ui->downloadsTree->header()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+            ui->downloadsTree->header()->setSectionResizeMode(5, QHeaderView::Fixed);
+            ui->downloadsTree->header()->resizeSection(5, 56);
         }
+
+        connect(ui->downloadsTree, &QTreeWidget::itemSelectionChanged, this, [this]() {
+            refreshActionButtons();
+        });
     }
 
     if (ui->outputLineEdit && ui->outputLineEdit->text().trimmed().isEmpty()) {
@@ -180,10 +199,53 @@ void VideoDownloader::setupDownloadUi()
     });
 
     connect(ui->cancelButton, &QPushButton::clicked, this, [this]() {
-        if (!hasRunningTask()) {
+        cancelSelectedTask();
+    });
+
+    connect(ui->deleteButton, &QPushButton::clicked, this, [this]() {
+        if (!ui || !ui->downloadsTree) {
             return;
         }
-        stopAllTasks();
+
+        QTreeWidgetItem *item = ui->downloadsTree->currentItem();
+        if (!item) {
+            QMessageBox::information(this, tr("未选择任务"), tr("请先在下载队列中选中一条任务。"));
+            return;
+        }
+
+        if (item->data(0, RoleStatus).toString() == QString::fromLatin1(StatusRunning)) {
+            QMessageBox::warning(this, tr("任务运行中"), tr("请先取消该任务，任务结束后再删除。"));
+            return;
+        }
+
+        const int row = ui->downloadsTree->indexOfTopLevelItem(item);
+        if (row < 0) {
+            return;
+        }
+
+        const QString filePath = item->data(0, RoleLocalFilePath).toString().trimmed();
+        bool deleteLocalFile = false;
+        if (!filePath.isEmpty() && QFileInfo::exists(filePath)) {
+            const auto answer = QMessageBox::question(
+                this,
+                tr("删除本地文件"),
+                tr("检测到本地文件：\n%1\n\n是否同时删除本地文件？").arg(filePath),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+            deleteLocalFile = (answer == QMessageBox::Yes);
+        }
+
+        if (deleteLocalFile) {
+            if (!QFile::remove(filePath)) {
+                QMessageBox::warning(this, tr("删除失败"), tr("任务已删除，但本地文件删除失败：\n%1").arg(filePath));
+            } else {
+                appendLog(QStringLiteral("已删除本地文件：%1").arg(filePath));
+            }
+        }
+
+        delete ui->downloadsTree->takeTopLevelItem(row);
+        appendLog(QStringLiteral("已删除队列任务。"));
+        refreshActionButtons();
     });
 
     refreshActionButtons();
@@ -229,6 +291,7 @@ void VideoDownloader::enqueueUrlFromInput(bool fromClipboard)
         ui->downloadsTree->addTopLevelItem(item);
         ui->downloadsTree->setCurrentItem(item);
         appendLog(QStringLiteral("已加入下载队列：%1").arg(urlText));
+        ui->urlLineEdit->clear();
         refreshActionButtons();
 
         // 入队后立即尝试调度：若当前并发未满，应立刻启动该任务而非停留在“待下载”。
@@ -246,6 +309,9 @@ QTreeWidgetItem *VideoDownloader::createQueueItem(const QString &url)
     item->setText(0, url);
     item->setText(1, QStringLiteral("0%"));
     item->setText(2, QStringLiteral("待下载"));
+    item->setText(3, QStringLiteral("--"));
+    item->setText(4, QStringLiteral("--"));
+    item->setText(5, QStringLiteral("--"));
     item->setData(0, RoleUrl, url);
     item->setData(0, RoleStatus, QString::fromLatin1(StatusPending));
     item->setData(0, RoleFormatId, formatIdFromUi());
@@ -353,12 +419,29 @@ bool VideoDownloader::buildRequestForItem(QTreeWidgetItem *item, QString *errorM
         setItemStatus(taskItem, QStringLiteral("%1%").arg(percent), QStringLiteral("下载中"));
     });
 
-    connect(runner, &VideoDownloadTaskRunner::destinationResolved, this, [this, runner](const QString &fileName) {
+    connect(runner, &VideoDownloadTaskRunner::destinationResolved, this, [this, runner](const QString &filePath) {
         QTreeWidgetItem *taskItem = m_runningTaskMap.value(runner, nullptr);
-        if (!taskItem || fileName.isEmpty()) {
+        if (!taskItem || filePath.trimmed().isEmpty()) {
             return;
         }
-        taskItem->setText(0, fileName);
+
+        const QFileInfo info(filePath.trimmed());
+        if (!info.fileName().isEmpty()) {
+            taskItem->setText(0, info.fileName());
+        }
+        taskItem->setData(0, RoleLocalFilePath, info.absoluteFilePath());
+    });
+
+    connect(runner, &VideoDownloadTaskRunner::metadataResolved, this,
+            [this, runner](const QString &resolution, const QString &duration, const QString &fps) {
+        QTreeWidgetItem *taskItem = m_runningTaskMap.value(runner, nullptr);
+        if (!taskItem) {
+            return;
+        }
+
+        taskItem->setText(3, resolution.isEmpty() ? QStringLiteral("--") : resolution);
+        taskItem->setText(4, duration.isEmpty() ? QStringLiteral("--") : duration);
+        taskItem->setText(5, fps.isEmpty() ? QStringLiteral("--") : fps);
     });
 
     connect(runner, &VideoDownloadTaskRunner::taskFinished, this,
@@ -499,6 +582,64 @@ void VideoDownloader::refreshActionButtons()
         ui->downloadButton->setEnabled(true);
     }
     if (ui->cancelButton) {
-        ui->cancelButton->setEnabled(hasRunningTask());
+        bool cancellableSelected = false;
+        if (ui->downloadsTree && ui->downloadsTree->currentItem()) {
+            const QString status = ui->downloadsTree->currentItem()->data(0, RoleStatus).toString();
+            cancellableSelected = (status == QString::fromLatin1(StatusRunning)
+                                   || status == QString::fromLatin1(StatusPending));
+        }
+        ui->cancelButton->setEnabled(cancellableSelected);
     }
+
+    if (ui->deleteButton) {
+        const bool hasSelection = (ui->downloadsTree && ui->downloadsTree->currentItem());
+        ui->deleteButton->setEnabled(hasSelection);
+    }
+}
+
+void VideoDownloader::cancelSelectedTask()
+{
+    if (!ui || !ui->downloadsTree) {
+        return;
+    }
+
+    QTreeWidgetItem *item = ui->downloadsTree->currentItem();
+    if (!item) {
+        QMessageBox::information(this, tr("未选择任务"), tr("请先在下载队列中选中一条任务。"));
+        return;
+    }
+
+    const QString status = item->data(0, RoleStatus).toString();
+    if (status == QString::fromLatin1(StatusPending)) {
+        setItemStatus(item, item->text(1), QStringLiteral("已取消"));
+        item->setData(0, RoleStatus, QString::fromLatin1(StatusCanceled));
+        appendLog(QStringLiteral("已取消排队任务：%1").arg(item->data(0, RoleUrl).toString()));
+        refreshActionButtons();
+        return;
+    }
+
+    if (status == QString::fromLatin1(StatusRunning)) {
+        VideoDownloadTaskRunner *runner = runnerForItem(item);
+        if (runner) {
+            runner->cancelTask();
+        }
+        return;
+    }
+
+    QMessageBox::information(this, tr("无法取消"), tr("当前任务状态不可取消。"));
+}
+
+VideoDownloadTaskRunner *VideoDownloader::runnerForItem(QTreeWidgetItem *item) const
+{
+    if (!item) {
+        return nullptr;
+    }
+
+    for (auto it = m_runningTaskMap.constBegin(); it != m_runningTaskMap.constEnd(); ++it) {
+        if (it.value() == item) {
+            return it.key();
+        }
+    }
+
+    return nullptr;
 }
