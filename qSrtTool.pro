@@ -26,9 +26,7 @@ SOURCES += \
     src/Modules/Translator/llmserviceclient.cpp \
     src/Modules/Translator/promptrequestcomposer.cpp \
     src/Modules/Translator/promptediting.cpp \
-    src/Widgets/logconsole.cpp \
     src/Widgets/pageswitchconfirmdialog.cpp \
-    src/Widgets/progressbox.cpp \
     src/main.cpp \
     src/mainwindow.cpp \
     src/Modules/OutputMgr/outputmanagement.cpp \
@@ -55,9 +53,7 @@ HEADERS += \
     src/Modules/Translator/llmserviceclient.h \
     src/Modules/Translator/promptrequestcomposer.h \
     src/Modules/Translator/promptediting.h \
-    src/Widgets/logconsole.h \
     src/Widgets/pageswitchconfirmdialog.h \
-    src/Widgets/progressbox.h \
     src/mainwindow.h \
     src/Modules/OutputMgr/outputmanagement.h \
     src/Modules/Burner/subtitleburncommandbuilder.h \
