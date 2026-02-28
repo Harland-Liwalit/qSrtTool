@@ -79,6 +79,8 @@ private:
     QNetworkAccessManager *m_networkManager = nullptr;
     QHash<QNetworkReply *, ReplyKind> m_replyKinds;
     QHash<QNetworkReply *, QTimer *> m_replyTimers;
+    QHash<QNetworkReply *, bool> m_replyTimedOut;
+    QHash<QNetworkReply *, int> m_replyTimeoutMs;
     QHash<QNetworkReply *, bool> m_replyStreaming;
     QHash<QNetworkReply *, QByteArray> m_streamBuffers;
     QHash<QNetworkReply *, QString> m_streamAccumulated;

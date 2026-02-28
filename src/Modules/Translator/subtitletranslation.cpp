@@ -50,6 +50,11 @@ QString naturalInstructionStorageKey()
     return QStringLiteral("translator/prompt/natural_instruction");
 }
 
+QString uiSettingKey(const QString &field)
+{
+    return QStringLiteral("translator/ui/") + field;
+}
+
 int segmentSize()
 {
     return 200;
@@ -63,7 +68,7 @@ QString intermediateOutputDirectory()
 QRegularExpression srtBlockRegex()
 {
     static const QRegularExpression regex(
-        QStringLiteral("(?ms)(\\d+)\\s*\\n\\s*(\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3})\\s*-->\\s*(\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3})\\s*\\n(.*?)(?=\\n{2,}\\d+\\s*\\n\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*-->|\\z)"));
+        QStringLiteral("(?ms)(?:\\s*(\\d+)\\s*\\n)?\\s*(\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3})\\s*-->\\s*(\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3})\\s*\\n(.*?)(?=\\n{2,}(?:\\d+\\s*\\n)?\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*-->|\\z)"));
     return regex;
 }
 
@@ -151,7 +156,10 @@ SubtitleTranslation::SubtitleTranslation(QWidget *parent) :
     refreshPresetList();
     loadStoredSecrets();
     loadStoredNaturalInstruction();
+    ui->maxTokensSpinBox->setMaximum(1000000);
+    ui->maxTokensSpinBox->setSingleStep(1024);
     applyProviderDefaults(true);
+    loadUiPreferences();
     updateSecretInputState();
 
     ui->modelComboBox->setEditable(true);
@@ -175,21 +183,58 @@ SubtitleTranslation::SubtitleTranslation(QWidget *parent) :
         connect(ui->temperatureSpinBox,
             static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
             this,
-            [this](double) { syncSharedParametersToPreset(); });
-        connect(ui->streamingCheckBox, &QCheckBox::toggled, this, [this](bool) { syncSharedParametersToPreset(); });
+            [this](double) { syncSharedParametersToPreset(); persistUiPreferences(); });
+        connect(ui->streamingCheckBox, &QCheckBox::toggled, this, [this](bool) { syncSharedParametersToPreset(); persistUiPreferences(); });
         connect(ui->modelComboBox,
             &QComboBox::currentTextChanged,
             this,
-            [this](const QString &) { syncSharedParametersToPreset(); });
+            [this](const QString &) { syncSharedParametersToPreset(); persistUiPreferences(); });
         connect(ui->instructionTextEdit,
             &QTextEdit::textChanged,
             this,
             &SubtitleTranslation::onNaturalInstructionChanged);
 
+        connect(ui->maxTokensSpinBox,
+            static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
+            this,
+            [this](int) { persistUiPreferences(); });
+        connect(ui->sourceLangComboBox,
+            &QComboBox::currentTextChanged,
+            this,
+            [this](const QString &) { persistUiPreferences(); });
+        connect(ui->targetLangComboBox,
+            &QComboBox::currentTextChanged,
+            this,
+            [this](const QString &) { persistUiPreferences(); });
+        connect(ui->keepTimelineCheckBox,
+            &QCheckBox::toggled,
+            this,
+            [this](bool) { persistUiPreferences(); });
+        connect(ui->reviewCheckBox,
+            &QCheckBox::toggled,
+            this,
+            [this](bool) { persistUiPreferences(); });
+        connect(ui->hostLineEdit,
+            &QLineEdit::textChanged,
+            this,
+            [this](const QString &) { persistUiPreferences(); });
+        connect(ui->providerComboBox,
+            &QComboBox::currentTextChanged,
+            this,
+            [this](const QString &) { persistUiPreferences(); });
+        connect(ui->presetComboBox,
+            &QComboBox::currentTextChanged,
+            this,
+            [this](const QString &) { persistUiPreferences(); });
+        connect(ui->srtPathLineEdit,
+            &QLineEdit::textChanged,
+            this,
+            [this](const QString &) { persistUiPreferences(); });
+
     connect(ui->providerComboBox,
             &QComboBox::currentTextChanged,
             this,
-            [this](const QString &) { applyProviderDefaults(true); });
+            [this](const QString &) { applyProviderDefaults(false); });
 
     connect(m_llmClient, &LlmServiceClient::modelsReady, this, &SubtitleTranslation::onModelsReady);
     connect(m_llmClient, &LlmServiceClient::chatCompleted, this, &SubtitleTranslation::onChatCompleted);
@@ -401,7 +446,7 @@ LlmServiceConfig SubtitleTranslation::collectServiceConfig()
                                                     &m_savedServerPassword);
     config.model = ui->modelComboBox->currentText().trimmed();
     config.stream = ui->streamingCheckBox->isChecked();
-    config.timeoutMs = 60000;
+    config.timeoutMs = 0;
 
     updateSecretInputState();
     return config;
@@ -457,6 +502,98 @@ void SubtitleTranslation::persistNaturalInstruction()
 {
     QSettings settings(QStringLiteral("qSrtTool"), QStringLiteral("qSrtTool"));
     settings.setValue(naturalInstructionStorageKey(), ui->instructionTextEdit->toPlainText().trimmed());
+    settings.sync();
+}
+
+void SubtitleTranslation::loadUiPreferences()
+{
+    QSettings settings(QStringLiteral("qSrtTool"), QStringLiteral("qSrtTool"));
+    m_loadingUiPreferences = true;
+
+    const QString provider = settings.value(uiSettingKey(QStringLiteral("provider"))).toString().trimmed();
+    if (!provider.isEmpty()) {
+        const int idx = ui->providerComboBox->findText(provider);
+        if (idx >= 0) {
+            ui->providerComboBox->setCurrentIndex(idx);
+        } else {
+            ui->providerComboBox->setCurrentText(provider);
+        }
+    }
+
+    const QString host = settings.value(uiSettingKey(QStringLiteral("host"))).toString().trimmed();
+    if (!host.isEmpty()) {
+        ui->hostLineEdit->setText(host);
+    }
+
+    const QString model = settings.value(uiSettingKey(QStringLiteral("model"))).toString().trimmed();
+    if (!model.isEmpty()) {
+        ui->modelComboBox->setCurrentText(model);
+    }
+
+    const QString sourceLanguage = settings.value(uiSettingKey(QStringLiteral("source_language"))).toString().trimmed();
+    if (!sourceLanguage.isEmpty()) {
+        const int idx = ui->sourceLangComboBox->findText(sourceLanguage);
+        if (idx >= 0) {
+            ui->sourceLangComboBox->setCurrentIndex(idx);
+        } else {
+            ui->sourceLangComboBox->setCurrentText(sourceLanguage);
+        }
+    }
+
+    const QString targetLanguage = settings.value(uiSettingKey(QStringLiteral("target_language"))).toString().trimmed();
+    if (!targetLanguage.isEmpty()) {
+        const int idx = ui->targetLangComboBox->findText(targetLanguage);
+        if (idx >= 0) {
+            ui->targetLangComboBox->setCurrentIndex(idx);
+        } else {
+            ui->targetLangComboBox->setCurrentText(targetLanguage);
+        }
+    }
+
+    const QString instruction = settings.value(uiSettingKey(QStringLiteral("instruction"))).toString();
+    if (!instruction.trimmed().isEmpty()) {
+        ui->instructionTextEdit->setPlainText(instruction);
+    }
+
+    ui->temperatureSpinBox->setValue(settings.value(uiSettingKey(QStringLiteral("temperature")), ui->temperatureSpinBox->value()).toDouble());
+    ui->maxTokensSpinBox->setValue(settings.value(uiSettingKey(QStringLiteral("max_tokens")), ui->maxTokensSpinBox->value()).toInt());
+    ui->keepTimelineCheckBox->setChecked(settings.value(uiSettingKey(QStringLiteral("keep_timeline")), ui->keepTimelineCheckBox->isChecked()).toBool());
+    ui->reviewCheckBox->setChecked(settings.value(uiSettingKey(QStringLiteral("review_polish")), ui->reviewCheckBox->isChecked()).toBool());
+    ui->streamingCheckBox->setChecked(settings.value(uiSettingKey(QStringLiteral("streaming")), ui->streamingCheckBox->isChecked()).toBool());
+
+    const QString srtPath = settings.value(uiSettingKey(QStringLiteral("srt_path"))).toString().trimmed();
+    if (!srtPath.isEmpty()) {
+        ui->srtPathLineEdit->setText(srtPath);
+    }
+
+    const QString presetPath = settings.value(uiSettingKey(QStringLiteral("preset_path"))).toString().trimmed();
+    if (!presetPath.isEmpty()) {
+        refreshPresetList(presetPath);
+    }
+
+    m_loadingUiPreferences = false;
+}
+
+void SubtitleTranslation::persistUiPreferences()
+{
+    if (m_loadingUiPreferences) {
+        return;
+    }
+
+    QSettings settings(QStringLiteral("qSrtTool"), QStringLiteral("qSrtTool"));
+    settings.setValue(uiSettingKey(QStringLiteral("provider")), ui->providerComboBox->currentText().trimmed());
+    settings.setValue(uiSettingKey(QStringLiteral("host")), ui->hostLineEdit->text().trimmed());
+    settings.setValue(uiSettingKey(QStringLiteral("model")), ui->modelComboBox->currentText().trimmed());
+    settings.setValue(uiSettingKey(QStringLiteral("source_language")), ui->sourceLangComboBox->currentText().trimmed());
+    settings.setValue(uiSettingKey(QStringLiteral("target_language")), ui->targetLangComboBox->currentText().trimmed());
+    settings.setValue(uiSettingKey(QStringLiteral("instruction")), ui->instructionTextEdit->toPlainText());
+    settings.setValue(uiSettingKey(QStringLiteral("temperature")), ui->temperatureSpinBox->value());
+    settings.setValue(uiSettingKey(QStringLiteral("max_tokens")), ui->maxTokensSpinBox->value());
+    settings.setValue(uiSettingKey(QStringLiteral("keep_timeline")), ui->keepTimelineCheckBox->isChecked());
+    settings.setValue(uiSettingKey(QStringLiteral("review_polish")), ui->reviewCheckBox->isChecked());
+    settings.setValue(uiSettingKey(QStringLiteral("streaming")), ui->streamingCheckBox->isChecked());
+    settings.setValue(uiSettingKey(QStringLiteral("srt_path")), ui->srtPathLineEdit->text().trimmed());
+    settings.setValue(uiSettingKey(QStringLiteral("preset_path")), selectedPresetPath());
     settings.sync();
 }
 
@@ -542,7 +679,6 @@ void SubtitleTranslation::renderOutputPanel()
     }
 
     ui->outputTextEdit->setPlainText(blocks.join('\n'));
-    ui->outputTextEdit->verticalScrollBar()->setValue(ui->outputTextEdit->verticalScrollBar()->maximum());
 }
 
 void SubtitleTranslation::importSrtFile()
@@ -555,6 +691,7 @@ void SubtitleTranslation::importSrtFile()
         return;
     }
     ui->srtPathLineEdit->setText(path);
+    persistUiPreferences();
 }
 
 void SubtitleTranslation::refreshRemoteModels()
@@ -665,9 +802,28 @@ QString SubtitleTranslation::serializeSrtEntries(const QVector<SubtitleEntry> &e
 
 QString SubtitleTranslation::cleanSrtPreviewText(const QString &rawText) const
 {
-    const QVector<SubtitleEntry> parsed = parseSrtEntries(rawText);
+    QString candidate = rawText.trimmed();
+
+    const QRegularExpression fencedRegex(QStringLiteral("(?s)```(?:srt|SRT)?\\s*(.*?)\\s*```"));
+    const QRegularExpressionMatch fencedMatch = fencedRegex.match(candidate);
+    if (fencedMatch.hasMatch()) {
+        candidate = fencedMatch.captured(1).trimmed();
+    }
+
+    const QVector<SubtitleEntry> parsed = parseSrtEntries(candidate);
     if (parsed.isEmpty()) {
-        return rawText.trimmed();
+        const QRegularExpression looseBlockRegex(
+            QStringLiteral("(?ms)(?:\\s*\\d+\\s*\\n)?\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*-->\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*\\n.*?(?=\\n{2,}(?:\\d+\\s*\\n)?\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*-->|\\z)"));
+        QStringList blocks;
+        QRegularExpressionMatchIterator iterator = looseBlockRegex.globalMatch(candidate);
+        while (iterator.hasNext()) {
+            blocks.append(iterator.next().captured(0).trimmed());
+        }
+        if (!blocks.isEmpty()) {
+            return blocks.join(QStringLiteral("\n\n")).trimmed();
+        }
+
+        return candidate;
     }
     return serializeSrtEntries(parsed, true);
 }
@@ -859,10 +1015,9 @@ void SubtitleTranslation::applySegmentTranslationResult(const QString &rawRespon
     ui->translateProgressBar->setValue(progress);
     ui->progressStatusLabel->setText(tr("第 %1 段翻译完成，等待导出继续").arg(m_currentSegment + 1));
 
-    appendOutputMessage(tr("第 %1 段返回完成：输入 %2 条，解析输出 %3 条。点击“导出 SRT”将生成中间文件并继续下一段。")
+    appendOutputMessage(tr("第 %1 段返回完成：输入 %2 条。已在预览区完整显示清洗后的 API 返回内容；点击“导出 SRT”将生成中间文件并继续下一段。")
                         .arg(m_currentSegment + 1)
-                        .arg(segmentSource.size())
-                        .arg(translated.size()));
+                        .arg(segmentSource.size()));
     m_waitingExportToContinue = true;
 }
 
@@ -1029,6 +1184,7 @@ void SubtitleTranslation::onPresetSelectionChanged()
 void SubtitleTranslation::onNaturalInstructionChanged()
 {
     persistNaturalInstruction();
+    persistUiPreferences();
 }
 
 void SubtitleTranslation::onModelsReady(const QStringList &models)

@@ -2316,9 +2316,11 @@ debug/promptediting.o: src/Modules/Translator/promptediting.cpp src/Modules/Tran
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/QFileInfo \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/QJsonDocument \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/qjsondocument.h \
+		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/QList \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtWidgets/QMessageBox \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtWidgets/qmessagebox.h \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtCore/QSignalBlocker \
+		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtWidgets/QSizePolicy \
 		C:/Qt/Qt5.14.2/5.14.2/mingw73_64/include/QtWidgets/QTableWidgetItem
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o debug\promptediting.o src\Modules\Translator\promptediting.cpp
 

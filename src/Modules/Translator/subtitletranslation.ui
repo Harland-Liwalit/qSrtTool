@@ -505,10 +505,10 @@ QProgressBar::chunk { background-color: #1FA87A; border-radius: 4px; }</string>
              <number>256</number>
             </property>
             <property name="maximum">
-             <number>4096</number>
+             <number>1000000</number>
             </property>
             <property name="singleStep">
-             <number>128</number>
+             <number>1024</number>
             </property>
             <property name="value">
              <number>1024</number>

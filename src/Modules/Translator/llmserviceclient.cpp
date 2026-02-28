@@ -85,7 +85,8 @@ void LlmServiceClient::requestModels(const LlmServiceConfig &config)
     const QString endpoint = provider.contains("ollama") ? QStringLiteral("/api/tags")
                                                           : QStringLiteral("/models");
     const QNetworkRequest request = buildRequest(config, endpoint);
-    sendRequest(request, QByteArray(), ReplyKind::ModelList, qMax(5000, config.timeoutMs));
+    const int timeoutMs = config.timeoutMs > 0 ? config.timeoutMs : 30000;
+    sendRequest(request, QByteArray(), ReplyKind::ModelList, timeoutMs);
 }
 
 void LlmServiceClient::requestChatCompletion(const LlmServiceConfig &config,
@@ -112,7 +113,7 @@ void LlmServiceClient::requestChatCompletion(const LlmServiceConfig &config,
     sendRequest(request,
                 QJsonDocument(body).toJson(QJsonDocument::Compact),
                 ReplyKind::ChatCompletion,
-                qMax(10000, config.timeoutMs));
+                config.timeoutMs);
 }
 
 void LlmServiceClient::cancelAll()
@@ -314,6 +315,23 @@ QString LlmServiceClient::normalizeErrorMessage(QNetworkReply *reply, const QByt
         return tr("未知网络错误");
     }
 
+    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QString bodyText = QString::fromUtf8(responseBody).trimmed();
+
+    if (reply->error() == QNetworkReply::OperationCanceledError && m_replyTimedOut.value(reply, false)) {
+        const int timeoutMs = m_replyTimeoutMs.value(reply, 0);
+        const QString timeoutText = timeoutMs > 0
+                                    ? tr("请求超时（%1 ms）后被客户端中止").arg(timeoutMs)
+                                    : tr("请求被客户端中止");
+        if (!bodyText.isEmpty()) {
+            return tr("%1\nHTTP %2\n完整响应：\n%3")
+                .arg(timeoutText)
+                .arg(statusCode)
+                .arg(bodyText);
+        }
+        return timeoutText;
+    }
+
     if (!responseBody.isEmpty()) {
         QJsonParseError parseError;
         const QJsonDocument document = QJsonDocument::fromJson(responseBody, &parseError);
@@ -322,17 +340,33 @@ QString LlmServiceClient::normalizeErrorMessage(QNetworkReply *reply, const QByt
             const QJsonObject errorObject = root.value("error").toObject();
             const QString errorMessage = errorObject.value("message").toString().trimmed();
             if (!errorMessage.isEmpty()) {
-                return errorMessage;
+                return tr("HTTP %1\n错误消息：%2\n完整响应：\n%3")
+                    .arg(statusCode)
+                    .arg(errorMessage)
+                    .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed());
             }
 
             const QString fallbackMessage = root.value("message").toString().trimmed();
             if (!fallbackMessage.isEmpty()) {
-                return fallbackMessage;
+                return tr("HTTP %1\n错误消息：%2\n完整响应：\n%3")
+                    .arg(statusCode)
+                    .arg(fallbackMessage)
+                    .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed());
             }
+
+            return tr("HTTP %1\n完整响应：\n%2")
+                .arg(statusCode)
+                .arg(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented)).trimmed());
         }
+
+        return tr("HTTP %1\n完整响应：\n%2").arg(statusCode).arg(bodyText);
     }
 
     const QString qtError = reply->errorString().trimmed();
+    if (statusCode > 0) {
+        return qtError.isEmpty() ? tr("HTTP %1 请求失败").arg(statusCode)
+                                 : tr("HTTP %1 %2").arg(statusCode).arg(qtError);
+    }
     return qtError.isEmpty() ? tr("请求失败") : qtError;
 }
 
@@ -347,16 +381,21 @@ void LlmServiceClient::attachReply(QNetworkReply *reply, ReplyKind kind, int tim
     const bool requestMarkedStreaming = reply->request().hasRawHeader("X-QSrtTool-Stream")
                                         && reply->request().rawHeader("X-QSrtTool-Stream") == "1";
     m_replyStreaming.insert(reply, kind == ReplyKind::ChatCompletion && requestMarkedStreaming);
+    m_replyTimedOut.insert(reply, false);
+    m_replyTimeoutMs.insert(reply, timeoutMs);
 
-    QTimer *timer = new QTimer(reply);
-    timer->setSingleShot(true);
-    connect(timer, &QTimer::timeout, this, [this, reply]() {
-        if (reply) {
-            reply->abort();
-        }
-    });
-    timer->start(timeoutMs);
-    m_replyTimers.insert(reply, timer);
+    if (timeoutMs > 0) {
+        QTimer *timer = new QTimer(reply);
+        timer->setSingleShot(true);
+        connect(timer, &QTimer::timeout, this, [this, reply]() {
+            if (reply) {
+                m_replyTimedOut.insert(reply, true);
+                reply->abort();
+            }
+        });
+        timer->start(timeoutMs);
+        m_replyTimers.insert(reply, timer);
+    }
 
     connect(reply, &QIODevice::readyRead, this, [this, reply]() {
         if (!m_replyStreaming.value(reply, false)) {
@@ -496,6 +535,8 @@ void LlmServiceClient::finalizeReply(QNetworkReply *reply)
     }
 
     m_replyKinds.remove(reply);
+    m_replyTimedOut.remove(reply);
+    m_replyTimeoutMs.remove(reply);
     m_replyStreaming.remove(reply);
     m_streamBuffers.remove(reply);
     m_streamAccumulated.remove(reply);

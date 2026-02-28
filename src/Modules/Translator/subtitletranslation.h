@@ -47,6 +47,8 @@ private:
     void loadStoredSecrets();
     void loadStoredNaturalInstruction();
     void persistNaturalInstruction();
+    void loadUiPreferences();
+    void persistUiPreferences();
     QString buildAutoInstructionText() const;
     void updateSecretInputState();
     void persistSecret(const QString &storageKey, const QString &plainSecret);
@@ -103,6 +105,7 @@ private:
     QString m_savedApiKey;
     QString m_savedServerPassword;
     bool m_syncingSharedParameters = false;
+    bool m_loadingUiPreferences = false;
 
     QStringList m_outputLogLines;
     QString m_outputPreviewText;
