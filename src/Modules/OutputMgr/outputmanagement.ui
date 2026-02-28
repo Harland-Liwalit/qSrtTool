@@ -33,7 +33,7 @@ QPushButton:pressed { background-color: #E1E7ED; padding-top: 8px; padding-botto
 QPushButton#openFolderButton { background-color: #1FA87A; color: #FFFFFF; border: 1px solid #1A8F68; }
 QPushButton#openFolderButton:hover { background-color: #19966B; }
 QPushButton#openFolderButton:pressed { background-color: #157E5A; }
-QTableWidget, QTextEdit { background-color: #FFFFFF; border: 1px solid #CBD5DF; border-radius: 6px; }
+QTableWidget { background-color: #FFFFFF; border: 1px solid #CBD5DF; border-radius: 6px; }
 QTableWidget::item:selected { background-color: #E6F2EE; color: #1E2A24; }
 QHeaderView::section { background-color: #F2F4F7; border: 1px solid #CBD5DF; padding: 6px 8px; }</string>
     </property>
@@ -274,84 +274,6 @@ QHeaderView::section { background-color: #F2F4F7; border: 1px solid #CBD5DF; pad
                  </spacer>
                 </item>
              </layout>
-            </item>
-         </layout>
-        </widget>
-     </item>
-     <item>
-        <widget class="QFrame" name="detailsFrame">
-         <layout class="QVBoxLayout" name="detailsLayout">
-            <property name="spacing">
-             <number>10</number>
-            </property>
-            <property name="leftMargin">
-             <number>16</number>
-            </property>
-            <property name="topMargin">
-             <number>16</number>
-            </property>
-            <property name="rightMargin">
-             <number>16</number>
-            </property>
-            <property name="bottomMargin">
-             <number>16</number>
-            </property>
-            <item>
-             <layout class="QHBoxLayout" name="detailsHeaderRow">
-                <property name="spacing">
-                 <number>8</number>
-                </property>
-                <item>
-                 <widget class="QLabel" name="detailsTitleLabel">
-                    <property name="styleSheet">
-                     <string notr="true">font: 11pt &quot;Microsoft YaHei&quot;; font-weight: 600;</string>
-                    </property>
-                    <property name="text">
-                     <string>详情与日志</string>
-                    </property>
-                 </widget>
-                </item>
-                <item>
-                 <spacer name="detailsHeaderSpacer">
-                    <property name="orientation">
-                     <enum>Qt::Horizontal</enum>
-                    </property>
-                    <property name="sizeHint" stdset="0">
-                     <size>
-                        <width>40</width>
-                        <height>20</height>
-                     </size>
-                    </property>
-                 </spacer>
-                </item>
-                <item>
-                 <widget class="QPushButton" name="openItemButton">
-                    <property name="text">
-                     <string>打开文件</string>
-                    </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QPushButton" name="revealInFolderButton">
-                    <property name="text">
-                     <string>定位到目录</string>
-                    </property>
-                 </widget>
-                </item>
-             </layout>
-            </item>
-            <item>
-             <widget class="QTextEdit" name="detailsTextEdit">
-                <property name="minimumSize">
-                 <size>
-                    <width>0</width>
-                    <height>160</height>
-                 </size>
-                </property>
-                <property name="readOnly">
-                 <bool>true</bool>
-                </property>
-             </widget>
             </item>
          </layout>
         </widget>
