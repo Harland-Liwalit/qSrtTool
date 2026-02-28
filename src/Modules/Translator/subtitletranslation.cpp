@@ -856,22 +856,26 @@ QString SubtitleTranslation::cleanSrtPreviewText(const QString &rawText) const
         candidate = fencedMatch.captured(1).trimmed();
     }
 
-    const QVector<SubtitleEntry> parsed = parseSrtEntries(candidate);
-    if (parsed.isEmpty()) {
-        const QRegularExpression looseBlockRegex(
-            QStringLiteral("(?ms)(?:\\s*\\d+\\s*\\n)?\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*-->\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*\\n.*?(?=\\n{2,}(?:\\d+\\s*\\n)?\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*-->|\\z)"));
-        QStringList blocks;
-        QRegularExpressionMatchIterator iterator = looseBlockRegex.globalMatch(candidate);
-        while (iterator.hasNext()) {
-            blocks.append(iterator.next().captured(0).trimmed());
-        }
-        if (!blocks.isEmpty()) {
-            return blocks.join(QStringLiteral("\n\n")).trimmed();
-        }
-
-        return candidate;
+    QStringList blocks;
+    QRegularExpressionMatchIterator strictIterator = srtBlockRegex().globalMatch(candidate);
+    while (strictIterator.hasNext()) {
+        blocks.append(strictIterator.next().captured(0).trimmed());
     }
-    return serializeSrtEntries(parsed, true);
+    if (!blocks.isEmpty()) {
+        return blocks.join(QStringLiteral("\n\n")).trimmed();
+    }
+
+    const QRegularExpression looseBlockRegex(
+        QStringLiteral("(?ms)(?:\\s*\\d+\\s*\\n)?\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*-->\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*\\n.*?(?=\\n{2,}(?:\\d+\\s*\\n)?\\s*\\d{2}:\\d{2}:\\d{2}[,\\.]\\d{3}\\s*-->|\\z)"));
+    QRegularExpressionMatchIterator looseIterator = looseBlockRegex.globalMatch(candidate);
+    while (looseIterator.hasNext()) {
+        blocks.append(looseIterator.next().captured(0).trimmed());
+    }
+    if (!blocks.isEmpty()) {
+        return blocks.join(QStringLiteral("\n\n")).trimmed();
+    }
+
+    return candidate;
 }
 
 void SubtitleTranslation::resetTranslationSessionState()
